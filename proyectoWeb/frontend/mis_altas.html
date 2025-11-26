@@ -1,0 +1,196 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <title>Mis Altas</title>
+  <style>
+    body {
+      font-family: Arial;
+      margin: 0;
+      padding: 20px;
+      background-color: purple;
+      color: white;
+    }
+    header {
+      margin-bottom: 20px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    .volver {
+      background: #4B0082;
+      color: white;
+      border: none;
+      padding: 8px 12px;
+      cursor: pointer;
+    }
+    .volver:hover {
+      background: #360062;
+    }
+    .usuario {
+      font-size: 14px;
+      opacity: 0.9;
+    }
+    h2 {
+      margin: 0 0 10px 0;
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-top: 10px;
+      background-color: #800080;
+    }
+    th, td {
+      border: 1px solid #cccccc55; /* borde con transparencia para fondo oscuro */
+      padding: 8px;
+      text-align: left;
+      color: white;
+    }
+    th {
+      background-color: #4B0082;
+    }
+    tr:nth-child(even) td {
+      background-color: #7a007a;
+    }
+    tr:nth-child(odd) td {
+      background-color: #8a008a;
+    }
+    .no-data {
+      text-align: center;
+      margin-top: 20px;
+      color: #ffd966; /* amarillo suave para contraste */
+    }
+    .error {
+      color: #ffcccb;
+      margin-top: 10px;
+      min-height: 20px;
+    }
+    .loader {
+      margin-top: 10px;
+      font-size: 14px;
+      opacity: 0.9;
+    }
+    a.link {
+      color: #ffd966;
+      text-decoration: underline;
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <button class="volver" onclick="window.location.href='bienvenida.html'">← Menú Principal</button>
+    <div class="usuario" id="usuarioInfo"></div>
+  </header>
+
+  <h2>Mis Altas Registradas</h2>
+
+  <div class="loader" id="loader">Cargando refacciones...</div>
+  <div class="error" id="errorMsg"></div>
+
+  <table id="tablaRefacciones">
+    <thead>
+      <tr>
+        <th>ID</th>
+        <th>Descripción</th>
+        <th>Costo</th>
+        <th>Área</th>
+        <th>Consumo</th>
+        <th>Frecuencia</th>
+        <th>Unidad</th>
+        <th>Cantidad</th>
+        <th>Observación</th>
+        <th>Número Parte</th>
+        <th>Marca Proveedor</th>
+        <th>Equipos a Usar</th>
+        <th>Familia</th>
+        <th>Reemplazable</th>
+        <th>Reduce Velocidad</th>
+        <th>Existe Riesgo</th>
+        <th>Nacionalidad</th>
+        <th>Página Web</th>
+      </tr>
+    </thead>
+    <tbody></tbody>
+  </table>
+
+  <p class="no-data" id="noDataMsg" style="display:none;">No hay refacciones registradas aún.</p>
+
+  <script>
+    function mostrarUsuario() {
+      const nombre = localStorage.getItem('nombreUsuario');
+      const usuarioInfo = document.getElementById('usuarioInfo');
+      if (nombre) {
+        usuarioInfo.textContent = `Usuario: ${nombre}`;
+      } else {
+        usuarioInfo.textContent = '';
+      }
+    }
+
+    async function cargarMisAltas() {
+      const usuarioId = localStorage.getItem('usuarioId');
+      const loader = document.getElementById('loader');
+      const errorMsg = document.getElementById('errorMsg');
+      const noDataMsg = document.getElementById('noDataMsg');
+      const tbody = document.querySelector("#tablaRefacciones tbody");
+
+      errorMsg.textContent = '';
+      noDataMsg.style.display = 'none';
+      loader.style.display = 'block';
+      tbody.innerHTML = '';
+
+      if (!usuarioId) {
+        alert("Debes iniciar sesión primero");
+        window.location.href = "index.html";
+        return;
+      }
+
+      try {
+        const response = await fetch(`http://127.0.0.1:8000/api/mis_refacciones/${usuarioId}/`);
+        const data = await response.json();
+
+        if (!response.ok) {
+          throw new Error(data?.error || 'Error al cargar refacciones');
+        }
+
+        if (!Array.isArray(data) || data.length === 0) {
+          noDataMsg.style.display = 'block';
+          return;
+        }
+
+        data.forEach(ref => {
+          const row = document.createElement("tr");
+          row.innerHTML = `
+            <td>${ref.id ?? "N/A"}</td>
+            <td>${ref.descripcion ?? "N/A"}</td>
+            <td>${ref.costo ?? "N/A"}</td>
+            <td>${ref.area ?? "N/A"}</td>
+            <td>${ref.consumo ?? "N/A"}</td>
+            <td>${ref.frecuencia ?? "N/A"}</td>
+            <td>${ref.unidad ?? "N/A"}</td>
+            <td>${ref.cantidad ?? "N/A"}</td>
+            <td>${ref.observacion ?? "N/A"}</td>
+            <td>${ref.numero_parte_proveedor ?? "N/A"}</td>
+            <td>${ref.marca_proveedor ?? "N/A"}</td>
+            <td>${ref.equipos_a_usar ?? "N/A"}</td>
+            <td>${ref.familia ?? "N/A"}</td>
+            <td>${ref.reemplazable ?? "N/A"}</td>
+            <td>${ref.reduce_velocidad ?? "N/A"}</td>
+            <td>${ref.existe_riesgo ?? "N/A"}</td>
+            <td>${ref.nacionalidad ?? "N/A"}</td>
+            <td>${ref.pagina_web ? `<a class="link" href="${ref.pagina_web}" target="_blank" rel="noopener noreferrer">Abrir</a>` : "N/A"}</td>
+          `;
+          tbody.appendChild(row);
+        });
+      } catch (err) {
+        errorMsg.textContent = err.message || 'No se pudo conectar al servidor.';
+      } finally {
+        loader.style.display = 'none';
+      }
+    }
+
+    // Inicialización
+    mostrarUsuario();
+    cargarMisAltas();
+  </script>
+</body>
+</html>

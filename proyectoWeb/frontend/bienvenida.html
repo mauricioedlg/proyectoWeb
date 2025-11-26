@@ -1,0 +1,74 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <title>Bienvenida</title>
+  <style>
+    body {
+      font-family: Arial;
+      margin: 0;
+      background-color: purple;
+      color: white;
+    }
+    header {
+      background: #4B0082;
+      color: white;
+      padding: 10px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    nav a {
+      color: white;
+      margin: 0 10px;
+      text-decoration: none;
+    }
+    nav a:hover {
+      text-decoration: underline;
+    }
+    .saludo {
+      text-align: center;
+      margin-top: 50px;
+      font-size: 24px;
+    }
+    button {
+      background: #c00;
+      color: white;
+      border: none;
+      padding: 8px 12px;
+      cursor: pointer;
+    }
+    button:hover {
+      background: #900;
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <div>Proyecto Web</div>
+    <nav>
+      <a href="formulario.html">Formulario</a>
+      <a href="mis_altas.html">Mis Altas</a>
+      <button onclick="logout()">Cerrar Sesión</button>
+    </nav>
+  </header>
+
+  <div class="saludo">
+    <h1 id="saludo"></h1>
+  </div>
+
+  <script>
+    const nombre = localStorage.getItem('nombreUsuario');
+    if (nombre) {
+      document.getElementById('saludo').textContent = `Hola ${nombre}, bienvenido al app de refacciones`;
+    } else {
+      window.location.href = 'index.html';
+    }
+
+    function logout() {
+      localStorage.clear();
+      window.location.href = 'index.html';
+    }
+  </script>
+</body>
+</html>
