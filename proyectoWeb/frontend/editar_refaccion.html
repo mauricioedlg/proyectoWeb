@@ -1,0 +1,172 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <title>Editar Refacción</title>
+
+  <style>
+    body {
+      font-family: Arial;
+      margin: 20px;
+      background-color: purple;
+      color: white;
+    }
+    button.volver {
+      background: #4B0082;
+      color: white;
+      border: none;
+      padding: 8px 12px;
+      cursor: pointer;
+    }
+    button.volver:hover {
+      background: #360062;
+    }
+    label {
+      display: block;
+      margin-top: 10px;
+    }
+    /* CORRECCIÓN VISUAL: Input como bloque para forzar salto de línea */
+    input {
+      display: block;
+      width: 300px;
+      padding: 8px;
+      margin-bottom: 12px;
+    }
+    /* CORRECCIÓN VISUAL: Botón debajo del último input */
+    button.guardar {
+      display: block;
+      margin-top: 20px;
+      padding: 10px 20px;
+      background: #4B0082;
+      color: white;
+      border: none;
+      cursor: pointer;
+    }
+    button.guardar:hover {
+      background: #360062;
+    }
+  </style>
+</head>
+
+<body>
+
+  <button class="volver" onclick="window.location.href='corregir_altas.html'">← Regresar</button>
+
+  <h2>Editar Refacción</h2>
+
+  <form id="formEdit">
+
+    <label>Descripción</label>
+    <input id="descripcion">
+
+    <label>Costo</label>
+    <input id="costo" type="number" step="0.01">
+
+    <label>Área</label>
+    <input id="area">
+
+    <label>Consumo</label>
+    <input id="consumo">
+
+    <label>Frecuencia</label>
+    <input id="frecuencia">
+
+    <label>Unidad</label>
+    <input id="unidad">
+
+    <label>Cantidad</label>
+    <input id="cantidad" type="number">
+
+    <label>Observación</label>
+    <input id="observacion">
+
+    <label>Número parte proveedor</label>
+    <input id="numero_parte_proveedor">
+
+    <label>Marca proveedor</label>
+    <input id="marca_proveedor">
+
+    <label>Equipos a usar</label>
+    <input id="equipos_a_usar">
+
+    <label>Familia</label>
+    <input id="familia">
+
+    <label>Reemplazable</label>
+    <input id="reemplazable">
+
+    <label>Reduce velocidad</label>
+    <input id="reduce_velocidad">
+
+    <label>Existe riesgo</label>
+    <input id="existe_riesgo">
+
+    <label>Nacionalidad</label>
+    <input id="nacionalidad">
+
+    <label>Página web</label>
+    <input id="pagina_web"><br/>
+    <button class="guardar" type="submit">Guardar Cambios</button>
+
+  </form>
+
+
+<script>
+  async function cargarDatos() {
+    const id = localStorage.getItem("editar_id");
+    if(!id) return; // Validación extra
+
+    const res = await fetch(`http://127.0.0.1:8000/api/refaccion/${id}/`);
+    const r = await res.json();
+    
+    for (let campo in r) {
+      if (document.getElementById(campo)) {
+        document.getElementById(campo).value = r[campo] ?? "";
+      }
+    }
+  }
+
+  cargarDatos();
+
+  document.getElementById('formEdit').addEventListener("submit", async e => {
+    e.preventDefault();
+
+    const id = localStorage.getItem("editar_id");
+
+    const body = {
+      descripcion: document.getElementById('descripcion').value,
+      costo: document.getElementById('costo').value,
+      area: document.getElementById('area').value,
+      consumo: document.getElementById('consumo').value,
+      frecuencia: document.getElementById('frecuencia').value,
+      unidad: document.getElementById('unidad').value,
+      cantidad: document.getElementById('cantidad').value,
+      observacion: document.getElementById('observacion').value,
+      numero_parte_proveedor: document.getElementById('numero_parte_proveedor').value,
+      marca_proveedor: document.getElementById('marca_proveedor').value,
+      equipos_a_usar: document.getElementById('equipos_a_usar').value,
+      familia: document.getElementById('familia').value,
+      reemplazable: document.getElementById('reemplazable').value,
+      reduce_velocidad: document.getElementById('reduce_velocidad').value,
+      existe_riesgo: document.getElementById('existe_riesgo').value,
+      nacionalidad: document.getElementById('nacionalidad').value,
+      pagina_web: document.getElementById('pagina_web').value
+    };
+
+    const res = await fetch(`http://127.0.0.1:8000/api/refaccion/${id}/`, {
+      method: "PUT",
+      headers: {"Content-Type": "application/json"},
+      body: JSON.stringify(body)
+    });
+
+    const data = await res.json();
+    alert(data.mensaje || data.error);
+
+    if (res.ok) {
+      window.location.href = "corregir_altas.html";
+    }
+  });
+</script>
+
+</body>
+</html>

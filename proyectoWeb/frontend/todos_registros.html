@@ -2,7 +2,7 @@
 <html lang="es">
 <head>
   <meta charset="UTF-8">
-  <title>Mis Altas</title>
+  <title>Todos los Registros</title>
   <style>
     body {
       font-family: Arial;
@@ -27,27 +27,20 @@
     .volver:hover {
       background: #360062;
     }
-    .usuario {
-      font-size: 14px;
-      opacity: 0.9;
-    }
-    h2 {
-      margin: 0 0 10px 0;
-    }
 
-    /* Search + Botón */
     .top-bar {
       margin-top: 10px;
       display: flex;
       gap: 10px;
-      align-items: center;
     }
+
     #searchInput {
       padding: 8px;
       width: 300px;
       border-radius: 4px;
       border: none;
     }
+
     #btnExcel {
       padding: 8px 12px;
       background: #ffd966;
@@ -56,9 +49,6 @@
       border-radius: 4px;
       cursor: pointer;
     }
-    #btnExcel:hover {
-      background: #e6c255;
-    }
 
     table {
       width: 100%;
@@ -66,60 +56,44 @@
       margin-top: 10px;
       background-color: #800080;
     }
+
     th, td {
       border: 1px solid #cccccc55;
       padding: 8px;
-      text-align: left;
       color: white;
     }
+
     th {
       background-color: #4B0082;
     }
+
     tr:nth-child(even) td {
       background-color: #7a007a;
     }
+
     tr:nth-child(odd) td {
       background-color: #8a008a;
     }
-    .no-data {
-      text-align: center;
-      margin-top: 20px;
-      color: #ffd966;
-    }
-    .error {
-      color: #ffcccb;
-      margin-top: 10px;
-      min-height: 20px;
-    }
+
     .loader {
       margin-top: 10px;
-      font-size: 14px;
-      opacity: 0.9;
-    }
-    a.link {
-      color: #ffd966;
-      text-decoration: underline;
     }
   </style>
 </head>
+
 <body>
   <header>
     <button class="volver" onclick="window.location.href='bienvenida.html'">← Menú Principal</button>
-    <div class="usuario" id="usuarioInfo"></div>
+    <h2>Todos los Registros</h2>
   </header>
 
-  <h2>Mis Altas Registradas</h2>
-
-  <!-- 🔍 Search + Descargar -->
   <div class="top-bar">
-    <input type="text" id="searchInput" placeholder="Buscar por descripción o número de parte...">
-    <button id="btnExcel" onclick="descargarExcel()">Descargar registros</button>
+    <input id="searchInput" type="text" placeholder="Buscar por descripción o número de parte...">
+    <button id="btnExcel" onclick="descargarExcelGlobal()">Descargar registros</button>
   </div>
 
-  <div class="loader" id="loader">Cargando refacciones...</div>
-  <div class="error" id="errorMsg"></div>
-
-  <table id="tablaRefacciones">
+  <div id="loader" class="loader">Cargando registros...</div>
+  <table id="tablaRegistros">
     <thead>
       <tr>
         <th>ID</th>
@@ -145,54 +119,27 @@
     <tbody></tbody>
   </table>
 
-  <p class="no-data" id="noDataMsg" style="display:none;">No hay refacciones registradas aún.</p>
-
   <script>
-    let refaccionesOriginal = [];
+    let registrosOriginal = [];
 
-    function mostrarUsuario() {
-      const nombre = localStorage.getItem('nombreUsuario');
-      document.getElementById('usuarioInfo').textContent =
-        nombre ? `Usuario: ${nombre}` : '';
-    }
+    async function cargarRegistrosGlobales() {
+      const loader = document.getElementById("loader");
+      const tbody = document.querySelector("#tablaRegistros tbody");
 
-    async function cargarMisAltas() {
-      const usuarioId = localStorage.getItem('usuarioId');
-      const loader = document.getElementById('loader');
-      const errorMsg = document.getElementById('errorMsg');
-      const noDataMsg = document.getElementById('noDataMsg');
-      const tbody = document.querySelector("#tablaRefacciones tbody");
+      tbody.innerHTML = "";
+      loader.style.display = "block";
 
-      loader.style.display = 'block';
-      errorMsg.textContent = '';
-      tbody.innerHTML = '';
+      const response = await fetch("http://127.0.0.1:8000/api/todas_refacciones/");
+      const data = await response.json();
 
-      try {
-        const response = await fetch(`http://127.0.0.1:8000/api/mis_refacciones/${usuarioId}/`);
-        const data = await response.json();
-
-        if (!response.ok) {
-          throw new Error(data.error || "Error al cargar");
-        }
-
-        refaccionesOriginal = data;
-
-        if (data.length === 0) {
-          noDataMsg.style.display = "block";
-          return;
-        }
-
-        mostrarTabla(data);
-
-      } catch (err) {
-        errorMsg.textContent = err.message;
-      }
-
+      registrosOriginal = data;
       loader.style.display = "none";
+
+      mostrarTabla(registrosOriginal);
     }
 
     function mostrarTabla(lista) {
-      const tbody = document.querySelector("#tablaRefacciones tbody");
+      const tbody = document.querySelector("#tablaRegistros tbody");
       tbody.innerHTML = "";
 
       lista.forEach(ref => {
@@ -215,17 +162,16 @@
           <td>${ref.reduce_velocidad}</td>
           <td>${ref.existe_riesgo}</td>
           <td>${ref.nacionalidad}</td>
-          <td>${ref.pagina_web ? `<a class="link" href="${ref.pagina_web}" target="_blank">Abrir</a>` : "N/A"}</td>
+          <td>${ref.pagina_web ? `<a href="${ref.pagina_web}" target="_blank">Abrir</a>` : "N/A"}</td>
         `;
         tbody.appendChild(row);
       });
     }
 
-    // 🔍 Filtro Search
     document.getElementById("searchInput").addEventListener("input", function () {
       const texto = this.value.toLowerCase();
 
-      const filtrados = refaccionesOriginal.filter(ref =>
+      const filtrados = registrosOriginal.filter(ref =>
         (ref.descripcion || "").toLowerCase().includes(texto) ||
         (ref.numero_parte_proveedor || "").toLowerCase().includes(texto)
       );
@@ -233,14 +179,11 @@
       mostrarTabla(filtrados);
     });
 
-    // 📥 Descargar Excel
-    function descargarExcel() {
-      const usuarioId = localStorage.getItem("usuarioId");
-      window.open(`http://127.0.0.1:8000/api/descargar_excel/${usuarioId}/`);
+    function descargarExcelGlobal() {
+      window.open("http://127.0.0.1:8000/api/descargar_excel_global/");
     }
 
-    mostrarUsuario();
-    cargarMisAltas();
+    cargarRegistrosGlobales();
   </script>
 </body>
 </html>
