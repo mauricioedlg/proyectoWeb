@@ -53,6 +53,8 @@
       <a href="corregir_altas.html">Corregir Mis Altas</a>
       <a href="todos_registros.html">Altas Globales</a>
       
+      <a id="btnGerente" href="aprobaciones_pendientes.html" style="display:none; color: yellow; font-weight: bold;">Aprobaciones Pendientes</a>
+      
       <button onclick="logout()">Cerrar Sesión</button>
     </nav>
   </header>
@@ -63,9 +65,17 @@
 
   <script>
     const nombre = localStorage.getItem('nombreUsuario');
+    const rolDescripcion = localStorage.getItem('descripcionRol');
+
     if (nombre) {
       document.getElementById('saludo').textContent =
         `Hola ${nombre}, bienvenido al app de refacciones`;
+      
+      // VERIFICAR ROL PARA MOSTRAR BOTÓN DE GERENTE
+      if (rolDescripcion === 'Gerente Mantenimiento') {
+        document.getElementById('btnGerente').style.display = 'inline';
+      }
+
     } else {
       window.location.href = 'index.html';
     }

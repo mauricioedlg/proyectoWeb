@@ -43,7 +43,6 @@
       border: none;
     }
 
-    /* Estilo para los Dropdowns */
     .top-bar select {
       padding: 8px;
       border-radius: 4px;
@@ -52,7 +51,6 @@
       color: black;
     }
 
-    /* Botón Limpiar */
     #btnLimpiar {
       padding: 8px 12px;
       background: #e0e0e0;
@@ -65,7 +63,6 @@
       background: #ccc;
     }
 
-    /* Botón Excel */
     #btnExcel {
       padding: 8px 12px;
       background: #ffd966;
@@ -134,7 +131,6 @@
     </select>
     
     <button id="btnLimpiar" onclick="limpiarFiltros()">Limpiar filtros</button>
-
     <button id="btnExcel" onclick="descargarExcelGlobal()">Descargar registros</button>
   </div>
 
@@ -143,6 +139,7 @@
     <thead>
       <tr>
         <th>ID</th>
+        <th>Aprobado Mtto</th>
         <th>Descripción</th>
         <th>Costo</th>
         <th>Área</th>
@@ -191,6 +188,7 @@
         const row = document.createElement("tr");
         row.innerHTML = `
           <td>${ref.id}</td>
+          <td>${ref.aprobacion_mtto || 'PENDIENTE'}</td>
           <td>${ref.descripcion}</td>
           <td>${ref.costo}</td>
           <td>${ref.area}</td>
@@ -213,7 +211,7 @@
       });
     }
 
-    // --- LÓGICA DE FILTRADO GLOBAL ---
+    // --- LÓGICA DE FILTRADO ---
     const searchInput = document.getElementById("searchInput");
     const filtroFamilia = document.getElementById("filtroFamilia");
     const filtroNacionalidad = document.getElementById("filtroNacionalidad");
@@ -224,14 +222,10 @@
       const nacionalidadSeleccionada = filtroNacionalidad.value;
 
       const filtrados = registrosOriginal.filter(ref => {
-        // 1. Texto
         const cumpleTexto = (ref.descripcion || "").toLowerCase().includes(texto) ||
                             (ref.numero_parte_proveedor || "").toLowerCase().includes(texto);
         
-        // 2. Familia
         const cumpleFamilia = familiaSeleccionada === "" || ref.familia === familiaSeleccionada;
-        
-        // 3. Nacionalidad
         const cumpleNacionalidad = nacionalidadSeleccionada === "" || ref.nacionalidad === nacionalidadSeleccionada;
 
         return cumpleTexto && cumpleFamilia && cumpleNacionalidad;
@@ -247,7 +241,6 @@
       aplicarFiltrosGlobales();
     }
 
-    // Listeners
     searchInput.addEventListener("input", aplicarFiltrosGlobales);
     filtroFamilia.addEventListener("change", aplicarFiltrosGlobales);
     filtroNacionalidad.addEventListener("change", aplicarFiltrosGlobales);

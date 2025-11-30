@@ -45,14 +45,16 @@ def login_usuario(request):
             return JsonResponse({
                 'mensaje': 'Login exitoso',
                 'nombre': usuario.nombre,
-                'usuarioId': usuario.usuario_id
+                'usuarioId': usuario.usuario_id,
+                'rol': usuario.rol,
+                'descripcion_rol': usuario.descripcion_rol
             }, status=200)
         return JsonResponse({'error': 'Credenciales incorrectas'}, status=401)
     except Exception as e:
         return JsonResponse({'error': str(e)}, status=400)
 
 # --------------------------------------------------------------------------
-# VISTA: Crear Refacción (POST)
+# VISTA: Crear Refacción
 # --------------------------------------------------------------------------
 @csrf_exempt
 @require_http_methods(["POST"])
@@ -88,7 +90,8 @@ def crear_refaccion(request):
             nacionalidad=data.get('nacionalidad'),
             pagina_web=data.get('pagina_web'),
             archivo_pdf=contenido_pdf,
-            usuario_id=usuario_id
+            usuario_id=usuario_id,
+            aprobacion_mtto='PENDIENTE'
         )
         return JsonResponse({'mensaje': 'Refacción creada', 'id': nueva_refaccion.id}, status=201)
 
@@ -96,55 +99,45 @@ def crear_refaccion(request):
         return JsonResponse({'error': str(e)}, status=400)
 
 # --------------------------------------------------------------------------
-# VISTA: Mis Refacciones (Listar) -> CORREGIDO: Excluye PDF
+# VISTA: Mis Refacciones
 # --------------------------------------------------------------------------
 @csrf_exempt
 @require_http_methods(["GET"])
 def mis_refacciones(request, usuario_id):
     try:
-        # Obtenemos todos los valores
         refacciones = list(Refaccion.objects.filter(usuario_id=usuario_id).values())
-        
-        # Eliminamos el campo binario de cada registro para que JSON no falle
         for ref in refacciones:
             if 'archivo_pdf' in ref:
                 del ref['archivo_pdf']
-
         return JsonResponse(refacciones, safe=False, status=200)
     except Exception as e:
         return JsonResponse({'error': str(e)}, status=400)
 
 # --------------------------------------------------------------------------
-# VISTA: Todas las Refacciones (Globales) -> CORREGIDO: Excluye PDF
+# VISTA: Todas las Refacciones
 # --------------------------------------------------------------------------
 @csrf_exempt
 @require_http_methods(["GET"])
 def todas_refacciones(request):
     try:
         refacciones = list(Refaccion.objects.all().values())
-        
-        # Eliminamos el campo binario
         for ref in refacciones:
             if 'archivo_pdf' in ref:
                 del ref['archivo_pdf']
-
         return JsonResponse(refacciones, safe=False, status=200)
     except Exception as e:
-        return JsonResponse({'error': str(e)}, status=400)
+         return JsonResponse({'error': str(e)}, status=400)
 
 # --------------------------------------------------------------------------
-# VISTA: Descargar Excel Personal -> CORREGIDO: Excluye PDF
+# VISTA: Descargar Excel
 # --------------------------------------------------------------------------
 @csrf_exempt
 @require_http_methods(["GET"])
 def descargar_excel(request, usuario_id):
     try:
         refacciones = list(Refaccion.objects.filter(usuario_id=usuario_id).values())
-
         if not refacciones:
             return JsonResponse({'error': 'No hay datos para exportar'}, status=404)
-
-        # Limpiamos binarios antes de crear el Excel
         for ref in refacciones:
             if 'archivo_pdf' in ref:
                 del ref['archivo_pdf']
@@ -158,18 +151,15 @@ def descargar_excel(request, usuario_id):
         return JsonResponse({'error': str(e)}, status=400)
 
 # --------------------------------------------------------------------------
-# VISTA: Descargar Excel Global -> CORREGIDO: Excluye PDF
+# VISTA: Descargar Excel Global
 # --------------------------------------------------------------------------
 @csrf_exempt
 @require_http_methods(["GET"])
 def descargar_excel_global(request):
     try:
         refacciones = list(Refaccion.objects.all().values())
-
         if not refacciones:
             return JsonResponse({'error': 'No hay datos para exportar'}, status=404)
-
-        # Limpiamos binarios
         for ref in refacciones:
             if 'archivo_pdf' in ref:
                 del ref['archivo_pdf']
@@ -183,27 +173,34 @@ def descargar_excel_global(request):
         return JsonResponse({'error': str(e)}, status=400)
 
 # --------------------------------------------------------------------------
-# VISTA UNIFICADA: Detalle de Refacción (GET y POST)
+# VISTA: Detalle Refacción (ACTUALIZADA: Devuelve nombre solicitante)
 # --------------------------------------------------------------------------
 @csrf_exempt
 @require_http_methods(["GET", "POST"])
 def detalle_refaccion(request, refaccion_id):
-    
-    # 1. Obtener datos (GET) -> Ya incluía limpieza, la mantenemos
     if request.method == 'GET':
         try:
-            r = Refaccion.objects.filter(id=refaccion_id).values().first()
-            if not r:
+            # Obtenemos valores básicos
+            data = Refaccion.objects.filter(id=refaccion_id).values().first()
+            if not data:
                 return JsonResponse({'error': 'Refacción no encontrada'}, status=404)
             
-            if 'archivo_pdf' in r:
-                del r['archivo_pdf'] 
+            # Limpieza PDF
+            if 'archivo_pdf' in data:
+                del data['archivo_pdf'] 
+
+            # AGREGAR NOMBRE DEL USUARIO
+            try:
+                usuario = Usuario.objects.get(usuario_id=data['usuario_id'])
+                data['nombre_solicitante'] = f"{usuario.nombre} {usuario.apellidos}"
+            except Usuario.DoesNotExist:
+                data['nombre_solicitante'] = "Usuario Desconocido"
                 
-            return JsonResponse(r, safe=False, status=200)
+            return JsonResponse(data, safe=False, status=200)
+
         except Exception as e:
             return JsonResponse({'error': str(e)}, status=400)
 
-    # 2. Editar datos (POST)
     if request.method == 'POST':
         try:
             refaccion = Refaccion.objects.filter(id=refaccion_id).first()
@@ -241,3 +238,52 @@ def detalle_refaccion(request, refaccion_id):
 
         except Exception as e:
             return JsonResponse({'error': str(e)}, status=400)
+
+# --------------------------------------------------------------------------
+# VISTA: Pendientes Aprobación (ACTUALIZADA: Devuelve nombre solicitante)
+# --------------------------------------------------------------------------
+@csrf_exempt
+@require_http_methods(["GET"])
+def pendientes_aprobacion(request):
+    try:
+        # Usamos select_related para ser eficientes
+        refs_qs = Refaccion.objects.filter(aprobacion_mtto='PENDIENTE').select_related('usuario')
+        
+        lista_final = []
+        for r in refs_qs:
+            lista_final.append({
+                'id': r.id,
+                'descripcion': r.descripcion,
+                'usuario_id': r.usuario_id,
+                'nombre_solicitante': f"{r.usuario.nombre} {r.usuario.apellidos}", # CAMPO NUEVO
+                'aprobacion_mtto': r.aprobacion_mtto
+            })
+
+        return JsonResponse(lista_final, safe=False, status=200)
+    except Exception as e:
+        return JsonResponse({'error': str(e)}, status=400)
+
+# --------------------------------------------------------------------------
+# VISTA: Gestionar Aprobación
+# --------------------------------------------------------------------------
+@csrf_exempt
+@require_http_methods(["POST"])
+def gestionar_aprobacion(request, refaccion_id):
+    try:
+        data = json.loads(request.body.decode('utf-8'))
+        accion = data.get('accion') 
+
+        refaccion = Refaccion.objects.filter(id=refaccion_id).first()
+        if not refaccion:
+            return JsonResponse({'error': 'Refacción no encontrada'}, status=404)
+
+        if accion not in ['SI', 'NO']:
+             return JsonResponse({'error': 'Acción no válida'}, status=400)
+
+        refaccion.aprobacion_mtto = accion
+        refaccion.save()
+
+        return JsonResponse({'mensaje': f'Refacción actualizada a: {accion}'}, status=200)
+
+    except Exception as e:
+        return JsonResponse({'error': str(e)}, status=400)
