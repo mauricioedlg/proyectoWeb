@@ -162,7 +162,8 @@
       <tr>
         <th>ID</th>
         <th>Aprobado Mtto</th>
-        <th>Aprobado Planta</th> <th>Descripción</th>
+        <th>Aprobado Planta</th>
+        <th>Número MFG</th> <th>Descripción</th>
         <th>Costo</th>
         <th>Área</th>
         <th>Consumo</th>
@@ -239,7 +240,8 @@
         row.innerHTML = `
           <td>${ref.id}</td>
           <td>${ref.aprobacion_mtto || 'PENDIENTE'}</td>
-          <td>${ref.aprobacion_planta || 'PENDIENTE'}</td> <td>${ref.descripcion}</td>
+          <td>${ref.aprobacion_planta || 'PENDIENTE'}</td>
+          <td>${ref.numero_mfg || 'PENDIENTE'}</td> <td>${ref.descripcion}</td>
           <td>${ref.costo}</td>
           <td>${ref.area}</td>
           <td>${ref.consumo}</td>

@@ -42,7 +42,6 @@
       background: #900;
     }
 
-    /* ESTILOS DE LA CAMPANA */
     .bell-container {
       position: relative;
       cursor: pointer;
@@ -80,6 +79,10 @@
         <a href="todos_registros.html">Altas Globales</a>
         
         <a id="btnGerente" href="aprobaciones_pendientes.html" style="display:none; color: yellow; font-weight: bold;">Aprobaciones Pendientes</a>
+
+        <a id="btnAsignarMFG" href="asignacion_mfg.html" style="display:none; color: #00ff00; font-weight: bold;">Asignar MFG</a>
+        <a id="btnTablaMFG" href="lista_con_mfg.html" style="display:none; color: cyan; font-weight: bold;">Lista con MFG (Fotos)</a>
+
       </nav>
 
       <div class="bell-container" onclick="window.location.href='notificaciones.html'">
@@ -104,9 +107,18 @@
       document.getElementById('saludo').textContent =
         `Hola ${nombre}, bienvenido al app de refacciones`;
       
-      // MOSTRAR BOTÓN A AMBOS GERENTES
-      if (rolDescripcion === 'Gerente Mantenimiento' || rolDescripcion === 'Gerente Planta') {
-        document.getElementById('btnGerente').style.display = 'inline';
+      // LOGICA DE BOTONES SEGUN ROL
+      if (rolDescripcion) {
+          const rol = rolDescripcion.trim();
+
+          if (rol === 'Gerente Mantenimiento' || rol === 'Gerente Planta') {
+             document.getElementById('btnGerente').style.display = 'inline';
+          }
+
+          if (rol === 'Almacenista') {
+             document.getElementById('btnAsignarMFG').style.display = 'inline';
+             document.getElementById('btnTablaMFG').style.display = 'inline'; // Mostrar nuevo botón
+          }
       }
 
       cargarBadge();
@@ -119,7 +131,6 @@
       try {
         const res = await fetch(`http://127.0.0.1:8000/api/notificaciones/${usuarioId}/`);
         const data = await res.json();
-        
         const noLeidas = data.filter(n => !n.leido).length;
         const badge = document.getElementById('badgeNotif');
 
@@ -129,9 +140,7 @@
         } else {
           badge.style.display = 'none';
         }
-      } catch (e) {
-        console.error("Error cargando notificaciones", e);
-      }
+      } catch (e) { console.error(e); }
     }
 
     function logout() {

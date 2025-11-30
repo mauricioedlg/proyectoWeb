@@ -2,6 +2,7 @@ from django.http import JsonResponse, HttpResponse
 from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_http_methods
 from .models import Usuario, Refaccion, Notificacion
+from django.db.models import Q 
 import json
 import pandas as pd
 
@@ -92,12 +93,11 @@ def crear_refaccion(request):
             archivo_pdf=contenido_pdf,
             usuario_id=usuario_id,
             aprobacion_mtto='PENDIENTE',
-            aprobacion_planta='PENDIENTE'
+            aprobacion_planta='PENDIENTE',
+            numero_mfg='PENDIENTE'
         )
 
-        # NOTIFICAR GERENTE MANTENIMIENTO
         gerentes = Usuario.objects.filter(descripcion_rol='Gerente Mantenimiento')
-        
         solicitante = Usuario.objects.filter(usuario_id=usuario_id).first()
         nombre_solicitante = f"{solicitante.nombre} {solicitante.apellidos}" if solicitante else "Un usuario"
 
@@ -114,7 +114,7 @@ def crear_refaccion(request):
         return JsonResponse({'error': str(e)}, status=400)
 
 # --------------------------------------------------------------------------
-# VISTAS: Consultas (Mis Refacciones / Todas)
+# VISTAS: Consultas (Mis Refacciones / Todas) - CORREGIDAS
 # --------------------------------------------------------------------------
 @csrf_exempt
 @require_http_methods(["GET"])
@@ -122,8 +122,8 @@ def mis_refacciones(request, usuario_id):
     try:
         refacciones = list(Refaccion.objects.filter(usuario_id=usuario_id).values())
         for ref in refacciones:
-            if 'archivo_pdf' in ref:
-                del ref['archivo_pdf']
+            if 'archivo_pdf' in ref: del ref['archivo_pdf']
+            if 'foto_refaccion' in ref: del ref['foto_refaccion'] # CORRECCION
         return JsonResponse(refacciones, safe=False, status=200)
     except Exception as e:
         return JsonResponse({'error': str(e)}, status=400)
@@ -134,8 +134,8 @@ def todas_refacciones(request):
     try:
         refacciones = list(Refaccion.objects.all().values())
         for ref in refacciones:
-            if 'archivo_pdf' in ref:
-                del ref['archivo_pdf']
+            if 'archivo_pdf' in ref: del ref['archivo_pdf']
+            if 'foto_refaccion' in ref: del ref['foto_refaccion'] # CORRECCION
         return JsonResponse(refacciones, safe=False, status=200)
     except Exception as e:
          return JsonResponse({'error': str(e)}, status=400)
@@ -148,8 +148,8 @@ def descargar_excel(request, usuario_id):
         if not refacciones:
             return JsonResponse({'error': 'No hay datos para exportar'}, status=404)
         for ref in refacciones:
-            if 'archivo_pdf' in ref:
-                del ref['archivo_pdf']
+            if 'archivo_pdf' in ref: del ref['archivo_pdf']
+            if 'foto_refaccion' in ref: del ref['foto_refaccion'] # CORRECCION
         df = pd.DataFrame(refacciones)
         response = HttpResponse(content_type='application/vnd.ms-excel')
         response['Content-Disposition'] = 'attachment; filename="mis_refacciones.xlsx"'
@@ -166,8 +166,8 @@ def descargar_excel_global(request):
         if not refacciones:
             return JsonResponse({'error': 'No hay datos para exportar'}, status=404)
         for ref in refacciones:
-            if 'archivo_pdf' in ref:
-                del ref['archivo_pdf']
+            if 'archivo_pdf' in ref: del ref['archivo_pdf']
+            if 'foto_refaccion' in ref: del ref['foto_refaccion'] # CORRECCION
         df = pd.DataFrame(refacciones)
         response = HttpResponse(content_type='application/vnd.ms-excel')
         response['Content-Disposition'] = 'attachment; filename="todas_refacciones.xlsx"'
@@ -184,8 +184,11 @@ def detalle_refaccion(request, refaccion_id):
             data = Refaccion.objects.filter(id=refaccion_id).values().first()
             if not data:
                 return JsonResponse({'error': 'Refacción no encontrada'}, status=404)
-            if 'archivo_pdf' in data:
-                del data['archivo_pdf'] 
+            
+            # Limpiamos binarios pesados del detalle general
+            if 'archivo_pdf' in data: del data['archivo_pdf'] 
+            if 'foto_refaccion' in data: del data['foto_refaccion'] # CORRECCION
+
             try:
                 usuario = Usuario.objects.get(usuario_id=data['usuario_id'])
                 data['nombre_solicitante'] = f"{usuario.nombre} {usuario.apellidos}"
@@ -203,7 +206,6 @@ def detalle_refaccion(request, refaccion_id):
             data = request.POST
             archivo = request.FILES.get('archivo_pdf')
 
-            # Actualización campos
             refaccion.descripcion = data.get('descripcion', refaccion.descripcion)
             refaccion.costo = data.get('costo', refaccion.costo)
             refaccion.area = data.get('area', refaccion.area)
@@ -240,7 +242,6 @@ def detalle_refaccion(request, refaccion_id):
 @require_http_methods(["GET"])
 def pendientes_aprobacion(request):
     try:
-        # Solo lo que no ha revisado Mtto
         refs_qs = Refaccion.objects.filter(aprobacion_mtto='PENDIENTE').select_related('usuario')
         lista_final = []
         for r in refs_qs:
@@ -269,9 +270,7 @@ def gestionar_aprobacion(request, refaccion_id):
         refaccion.aprobacion_mtto = accion
         refaccion.save()
 
-        # LOGICA NOTIFICACION DE MANTENIMIENTO
         if accion == 'SI':
-             # Si aprueba Mtto -> Notificar a Gerente Planta
              gerentes_planta = Usuario.objects.filter(descripcion_rol='Gerente Planta')
              for gp in gerentes_planta:
                  Notificacion.objects.create(
@@ -280,7 +279,6 @@ def gestionar_aprobacion(request, refaccion_id):
                      url_destino="aprobaciones_pendientes.html"
                  )
         else:
-             # Si rechaza Mtto -> Notificar directo al Usuario
              Notificacion.objects.create(
                 usuario=refaccion.usuario,
                 mensaje=f"Tu refacción '{refaccion.descripcion}' fue RECHAZADA por Mantenimiento.",
@@ -293,13 +291,12 @@ def gestionar_aprobacion(request, refaccion_id):
         return JsonResponse({'error': str(e)}, status=400)
 
 # --------------------------------------------------------------------------
-# VISTAS: Aprobación PLANTA (NUEVO)
+# VISTAS: Aprobación PLANTA
 # --------------------------------------------------------------------------
 @csrf_exempt
 @require_http_methods(["GET"])
 def pendientes_aprobacion_planta(request):
     try:
-        # Solo lo que YA aprobó Mtto pero NO ha revisado Planta
         refs_qs = Refaccion.objects.filter(aprobacion_mtto='SI', aprobacion_planta='PENDIENTE').select_related('usuario')
         lista_final = []
         for r in refs_qs:
@@ -329,15 +326,81 @@ def gestionar_aprobacion_planta(request, refaccion_id):
         refaccion.aprobacion_planta = accion
         refaccion.save()
 
-        # LOGICA NOTIFICACION DE PLANTA -> SIEMPRE NOTIFICA AL USUARIO FINAL
-        estado_texto = "APROBADO" if accion == "SI" else "RECHAZADO"
+        if accion == 'SI':
+            almacenistas = Usuario.objects.filter(descripcion_rol='Almacenista')
+            for alm in almacenistas:
+                Notificacion.objects.create(
+                    usuario=alm,
+                    mensaje=f"Planta Aprobó. Pendiente MFG: {refaccion.descripcion}",
+                    url_destino="asignacion_mfg.html"
+                )
+            
+            Notificacion.objects.create(
+                usuario=refaccion.usuario,
+                mensaje=f"Planta aprobó '{refaccion.descripcion}'. Pendiente asignación MFG.",
+                url_destino="mis_altas.html"
+            )
+        else:
+            Notificacion.objects.create(
+                usuario=refaccion.usuario,
+                mensaje=f"Planta RECHAZÓ tu refacción '{refaccion.descripcion}'.",
+                url_destino="mis_altas.html"
+            )
+
+        return JsonResponse({'mensaje': f'Planta: Refacción {accion}'}, status=200)
+
+    except Exception as e:
+        return JsonResponse({'error': str(e)}, status=400)
+
+# --------------------------------------------------------------------------
+# VISTAS: Almacenista (Asignar MFG)
+# --------------------------------------------------------------------------
+@csrf_exempt
+@require_http_methods(["GET"])
+def pendientes_asignacion_mfg(request):
+    try:
+        refs_qs = Refaccion.objects.filter(
+            aprobacion_planta='SI', 
+            numero_mfg='PENDIENTE'
+        ).select_related('usuario')
+        
+        lista_final = []
+        for r in refs_qs:
+            lista_final.append({
+                'id': r.id,
+                'descripcion': r.descripcion,
+                'nombre_solicitante': f"{r.usuario.nombre} {r.usuario.apellidos}",
+                'numero_parte_proveedor': r.numero_parte_proveedor,
+                'aprobacion_planta': r.aprobacion_planta
+            })
+        return JsonResponse(lista_final, safe=False, status=200)
+    except Exception as e:
+        return JsonResponse({'error': str(e)}, status=400)
+
+@csrf_exempt
+@require_http_methods(["POST"])
+def asignar_mfg(request, refaccion_id):
+    try:
+        data = json.loads(request.body.decode('utf-8'))
+        mfg = data.get('numero_mfg') 
+
+        if not mfg:
+            return JsonResponse({'error': 'El numero MFG es obligatorio'}, status=400)
+
+        refaccion = Refaccion.objects.filter(id=refaccion_id).first()
+        if not refaccion:
+            return JsonResponse({'error': 'Refacción no encontrada'}, status=404)
+
+        refaccion.numero_mfg = mfg
+        refaccion.save()
+
         Notificacion.objects.create(
             usuario=refaccion.usuario,
-            mensaje=f"Tu refacción '{refaccion.descripcion}' fue revisada por Planta. Estatus: {estado_texto}",
+            mensaje=f"PROCESO COMPLETADO. '{refaccion.descripcion}' tiene MFG: {mfg}",
             url_destino="mis_altas.html"
         )
 
-        return JsonResponse({'mensaje': f'Planta: Refacción {accion}'}, status=200)
+        return JsonResponse({'mensaje': 'Número MFG asignado correctamente'}, status=200)
 
     except Exception as e:
         return JsonResponse({'error': str(e)}, status=400)
@@ -365,3 +428,71 @@ def leer_notificacion(request, notificacion_id):
         return JsonResponse({'mensaje': 'Leido'}, status=200)
     except Exception as e:
         return JsonResponse({'error': str(e)}, status=400)
+
+# --------------------------------------------------------------------------
+# VISTAS: Requerimiento Fotos y Tabla MFG (Almacenista 2)
+# --------------------------------------------------------------------------
+
+@csrf_exempt
+@require_http_methods(["GET"])
+def refacciones_con_mfg(request):
+    try:
+        refacciones = list(Refaccion.objects.exclude(numero_mfg='PENDIENTE').values())
+        
+        for ref in refacciones:
+            if 'archivo_pdf' in ref: del ref['archivo_pdf']
+            if 'foto_refaccion' in ref: del ref['foto_refaccion'] # CORRECCION
+            
+            try:
+                usr = Usuario.objects.get(usuario_id=ref['usuario_id'])
+                ref['nombre_solicitante'] = f"{usr.nombre} {usr.apellidos}"
+            except:
+                ref['nombre_solicitante'] = "Desconocido"
+
+        return JsonResponse(refacciones, safe=False, status=200)
+    except Exception as e:
+        return JsonResponse({'error': str(e)}, status=400)
+
+@csrf_exempt
+@require_http_methods(["POST"])
+def subir_foto(request, refaccion_id):
+    try:
+        refaccion = Refaccion.objects.filter(id=refaccion_id).first()
+        if not refaccion:
+            return JsonResponse({'error': 'No existe la refaccion'}, status=404)
+            
+        foto = request.FILES.get('foto')
+        if not foto:
+            return JsonResponse({'error': 'No se envió ninguna imagen'}, status=400)
+            
+        refaccion.foto_refaccion = foto.read()
+        refaccion.save()
+        
+        return JsonResponse({'mensaje': 'Foto subida correctamente'}, status=200)
+    except Exception as e:
+        return JsonResponse({'error': str(e)}, status=400)
+
+@csrf_exempt
+@require_http_methods(["GET"])
+def ver_foto(request, refaccion_id):
+    try:
+        ref = Refaccion.objects.filter(id=refaccion_id).first()
+        if not ref or not ref.foto_refaccion:
+            return HttpResponse(status=404) 
+        return HttpResponse(ref.foto_refaccion, content_type="image/jpeg")
+    except Exception as e:
+        return HttpResponse(status=400)
+
+@csrf_exempt
+@require_http_methods(["GET"])
+def descargar_pdf(request, refaccion_id):
+    try:
+        ref = Refaccion.objects.filter(id=refaccion_id).first()
+        if not ref or not ref.archivo_pdf:
+             return HttpResponse("No hay PDF disponible", status=404)
+
+        response = HttpResponse(ref.archivo_pdf, content_type='application/pdf')
+        response['Content-Disposition'] = f'attachment; filename="ficha_tecnica_{refaccion_id}.pdf"'
+        return response
+    except Exception as e:
+        return HttpResponse(str(e), status=400)
