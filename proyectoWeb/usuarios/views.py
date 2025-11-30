@@ -6,6 +6,9 @@ from django.db.models import Q
 import json
 import pandas as pd
 
+# MAPEO DE SITIOS (Para referencia rápida)
+SITIOS_MAP = {0: 'MBC', 1: 'Torreon', 2: 'Celaya'}
+
 # --------------------------------------------------------------------------
 # VISTA: Lista de usuarios
 # --------------------------------------------------------------------------
@@ -15,6 +18,7 @@ def lista_usuarios(request):
     if request.method == 'GET':
         usuarios = Usuario.objects.all().values()
         return JsonResponse(list(usuarios), safe=False)
+    
     try:
         data = json.loads(request.body.decode('utf-8'))
         nuevo_usuario = Usuario.objects.create(
@@ -42,20 +46,22 @@ def login_usuario(request):
         username = data.get('username')
         contrasena = data.get('contrasena')
         usuario = Usuario.objects.filter(username=username, contrasena=contrasena).first()
+        
         if usuario:
             return JsonResponse({
                 'mensaje': 'Login exitoso',
                 'nombre': usuario.nombre,
                 'usuarioId': usuario.usuario_id,
                 'rol': usuario.rol,
-                'descripcion_rol': usuario.descripcion_rol
+                'descripcion_rol': usuario.descripcion_rol,
+                'numero_de_sitio': usuario.numero_de_sitio
             }, status=200)
         return JsonResponse({'error': 'Credenciales incorrectas'}, status=401)
     except Exception as e:
         return JsonResponse({'error': str(e)}, status=400)
 
 # --------------------------------------------------------------------------
-# VISTA: Crear Refacción
+# VISTA: Crear Refacción (INICIA FLUJO POR SITIO)
 # --------------------------------------------------------------------------
 @csrf_exempt
 @require_http_methods(["POST"])
@@ -67,6 +73,15 @@ def crear_refaccion(request):
 
         if not usuario_id:
             return JsonResponse({'error': 'usuario_id es requerido'}, status=400)
+
+        # Obtenemos usuario para saber su SITIO
+        try:
+            solicitante = Usuario.objects.get(usuario_id=usuario_id)
+        except Usuario.DoesNotExist:
+            return JsonResponse({'error': 'Usuario no encontrado'}, status=404)
+
+        sitio_id = solicitante.numero_de_sitio
+        nombre_solicitante = f"{solicitante.nombre} {solicitante.apellidos}"
 
         contenido_pdf = None
         if data.get('familia') == 'Quimicos' and archivo:
@@ -92,19 +107,24 @@ def crear_refaccion(request):
             pagina_web=data.get('pagina_web'),
             archivo_pdf=contenido_pdf,
             usuario_id=usuario_id,
+            
+            # Status Iniciales
             aprobacion_mtto='PENDIENTE',
             aprobacion_planta='PENDIENTE',
-            numero_mfg='PENDIENTE'
+            numero_mfg='PENDIENTE',
+            cotizado='PENDIENTE' # Nuevo campo
         )
 
-        gerentes = Usuario.objects.filter(descripcion_rol='Gerente Mantenimiento')
-        solicitante = Usuario.objects.filter(usuario_id=usuario_id).first()
-        nombre_solicitante = f"{solicitante.nombre} {solicitante.apellidos}" if solicitante else "Un usuario"
+        # NOTIFICAR: Solo a Gerentes de Mantenimiento del MISMO SITIO
+        gerentes = Usuario.objects.filter(
+            descripcion_rol='Gerente Mantenimiento',
+            numero_de_sitio=sitio_id
+        )
 
         for gerente in gerentes:
             Notificacion.objects.create(
                 usuario=gerente,
-                mensaje=f"Nuevo registro de: {nombre_solicitante}. Ref: {nueva_refaccion.descripcion}",
+                mensaje=f"Nuevo registro en {SITIOS_MAP.get(sitio_id, 'Sitio'+str(sitio_id))} de: {nombre_solicitante}. Ref: {nueva_refaccion.descripcion}",
                 url_destino="aprobaciones_pendientes.html"
             )
 
@@ -114,7 +134,7 @@ def crear_refaccion(request):
         return JsonResponse({'error': str(e)}, status=400)
 
 # --------------------------------------------------------------------------
-# VISTAS: Consultas (Mis Refacciones / Todas) - CORREGIDAS
+# VISTAS: Consultas (Mis Refacciones / Todas)
 # --------------------------------------------------------------------------
 @csrf_exempt
 @require_http_methods(["GET"])
@@ -123,7 +143,7 @@ def mis_refacciones(request, usuario_id):
         refacciones = list(Refaccion.objects.filter(usuario_id=usuario_id).values())
         for ref in refacciones:
             if 'archivo_pdf' in ref: del ref['archivo_pdf']
-            if 'foto_refaccion' in ref: del ref['foto_refaccion'] # CORRECCION
+            if 'foto_refaccion' in ref: del ref['foto_refaccion']
         return JsonResponse(refacciones, safe=False, status=200)
     except Exception as e:
         return JsonResponse({'error': str(e)}, status=400)
@@ -133,9 +153,22 @@ def mis_refacciones(request, usuario_id):
 def todas_refacciones(request):
     try:
         refacciones = list(Refaccion.objects.all().values())
+        
+        # Enriquecer datos para filtros globales
         for ref in refacciones:
             if 'archivo_pdf' in ref: del ref['archivo_pdf']
-            if 'foto_refaccion' in ref: del ref['foto_refaccion'] # CORRECCION
+            if 'foto_refaccion' in ref: del ref['foto_refaccion']
+            
+            try:
+                usr = Usuario.objects.get(usuario_id=ref['usuario_id'])
+                # Agregar nombre solicitante
+                ref['nombre_solicitante'] = f"{usr.nombre} {usr.apellidos}"
+                # Agregar nombre del sitio usando el MAP
+                ref['nombre_sitio'] = SITIOS_MAP.get(usr.numero_de_sitio, 'Desconocido')
+            except Usuario.DoesNotExist:
+                ref['nombre_solicitante'] = "Usuario Eliminado"
+                ref['nombre_sitio'] = "N/A"
+
         return JsonResponse(refacciones, safe=False, status=200)
     except Exception as e:
          return JsonResponse({'error': str(e)}, status=400)
@@ -149,7 +182,7 @@ def descargar_excel(request, usuario_id):
             return JsonResponse({'error': 'No hay datos para exportar'}, status=404)
         for ref in refacciones:
             if 'archivo_pdf' in ref: del ref['archivo_pdf']
-            if 'foto_refaccion' in ref: del ref['foto_refaccion'] # CORRECCION
+            if 'foto_refaccion' in ref: del ref['foto_refaccion']
         df = pd.DataFrame(refacciones)
         response = HttpResponse(content_type='application/vnd.ms-excel')
         response['Content-Disposition'] = 'attachment; filename="mis_refacciones.xlsx"'
@@ -167,7 +200,7 @@ def descargar_excel_global(request):
             return JsonResponse({'error': 'No hay datos para exportar'}, status=404)
         for ref in refacciones:
             if 'archivo_pdf' in ref: del ref['archivo_pdf']
-            if 'foto_refaccion' in ref: del ref['foto_refaccion'] # CORRECCION
+            if 'foto_refaccion' in ref: del ref['foto_refaccion']
         df = pd.DataFrame(refacciones)
         response = HttpResponse(content_type='application/vnd.ms-excel')
         response['Content-Disposition'] = 'attachment; filename="todas_refacciones.xlsx"'
@@ -185,9 +218,8 @@ def detalle_refaccion(request, refaccion_id):
             if not data:
                 return JsonResponse({'error': 'Refacción no encontrada'}, status=404)
             
-            # Limpiamos binarios pesados del detalle general
             if 'archivo_pdf' in data: del data['archivo_pdf'] 
-            if 'foto_refaccion' in data: del data['foto_refaccion'] # CORRECCION
+            if 'foto_refaccion' in data: del data['foto_refaccion']
 
             try:
                 usuario = Usuario.objects.get(usuario_id=data['usuario_id'])
@@ -206,6 +238,7 @@ def detalle_refaccion(request, refaccion_id):
             data = request.POST
             archivo = request.FILES.get('archivo_pdf')
 
+            # Actualización de campos
             refaccion.descripcion = data.get('descripcion', refaccion.descripcion)
             refaccion.costo = data.get('costo', refaccion.costo)
             refaccion.area = data.get('area', refaccion.area)
@@ -263,15 +296,22 @@ def gestionar_aprobacion(request, refaccion_id):
         data = json.loads(request.body.decode('utf-8'))
         accion = data.get('accion') 
 
-        refaccion = Refaccion.objects.filter(id=refaccion_id).first()
+        refaccion = Refaccion.objects.select_related('usuario').filter(id=refaccion_id).first()
         if not refaccion:
             return JsonResponse({'error': 'Refacción no encontrada'}, status=404)
 
         refaccion.aprobacion_mtto = accion
         refaccion.save()
 
+        # Determinar SITIO del dueño de la refacción
+        sitio_id = refaccion.usuario.numero_de_sitio
+
         if accion == 'SI':
-             gerentes_planta = Usuario.objects.filter(descripcion_rol='Gerente Planta')
+             # Notificar solo a Gerentes de Planta del MISMO SITIO
+             gerentes_planta = Usuario.objects.filter(
+                 descripcion_rol='Gerente Planta',
+                 numero_de_sitio=sitio_id
+             )
              for gp in gerentes_planta:
                  Notificacion.objects.create(
                      usuario=gp,
@@ -319,15 +359,21 @@ def gestionar_aprobacion_planta(request, refaccion_id):
         data = json.loads(request.body.decode('utf-8'))
         accion = data.get('accion') 
 
-        refaccion = Refaccion.objects.filter(id=refaccion_id).first()
+        refaccion = Refaccion.objects.select_related('usuario').filter(id=refaccion_id).first()
         if not refaccion:
             return JsonResponse({'error': 'Refacción no encontrada'}, status=404)
 
         refaccion.aprobacion_planta = accion
         refaccion.save()
 
+        sitio_id = refaccion.usuario.numero_de_sitio
+
         if accion == 'SI':
-            almacenistas = Usuario.objects.filter(descripcion_rol='Almacenista')
+            # Notificar solo a Almacenistas del MISMO SITIO
+            almacenistas = Usuario.objects.filter(
+                descripcion_rol='Almacenista',
+                numero_de_sitio=sitio_id
+            )
             for alm in almacenistas:
                 Notificacion.objects.create(
                     usuario=alm,
@@ -387,12 +433,14 @@ def asignar_mfg(request, refaccion_id):
         if not mfg:
             return JsonResponse({'error': 'El numero MFG es obligatorio'}, status=400)
 
-        refaccion = Refaccion.objects.filter(id=refaccion_id).first()
+        refaccion = Refaccion.objects.select_related('usuario').filter(id=refaccion_id).first()
         if not refaccion:
             return JsonResponse({'error': 'Refacción no encontrada'}, status=404)
 
         refaccion.numero_mfg = mfg
         refaccion.save()
+
+        sitio_id = refaccion.usuario.numero_de_sitio
 
         # 1. Notificar al USUARIO (Dueño)
         Notificacion.objects.create(
@@ -400,9 +448,12 @@ def asignar_mfg(request, refaccion_id):
             mensaje=f"PROCESO COMPLETADO. '{refaccion.descripcion}' tiene MFG: {mfg}",
             url_destino="mis_altas.html"
         )
-
-        # 2. NUEVO: Notificar al COMPRADOR (Rol 4 o descripción 'Comprador')
-        compradores = Usuario.objects.filter(descripcion_rol='Comprador')
+        
+        # 2. Notificar al COMPRADOR del MISMO SITIO
+        compradores = Usuario.objects.filter(
+            descripcion_rol='Comprador',
+            numero_de_sitio=sitio_id
+        )
         for comp in compradores:
             Notificacion.objects.create(
                 usuario=comp,
@@ -451,7 +502,7 @@ def refacciones_con_mfg(request):
         
         for ref in refacciones:
             if 'archivo_pdf' in ref: del ref['archivo_pdf']
-            if 'foto_refaccion' in ref: del ref['foto_refaccion'] # CORRECCION
+            if 'foto_refaccion' in ref: del ref['foto_refaccion']
             
             try:
                 usr = Usuario.objects.get(usuario_id=ref['usuario_id'])
@@ -506,7 +557,6 @@ def descargar_pdf(request, refaccion_id):
         return response
     except Exception as e:
         return HttpResponse(str(e), status=400)
-    
 
 # --------------------------------------------------------------------------
 # VISTAS: ROL COMPRADOR (Nuevos Requerimientos)
@@ -538,7 +588,6 @@ def pendientes_cotizacion(request):
 @require_http_methods(["POST"])
 def realizar_cotizacion(request, refaccion_id):
     try:
-        # Simplemente cambia el estado a SI y notifica al usuario
         refaccion = Refaccion.objects.filter(id=refaccion_id).first()
         if not refaccion:
             return JsonResponse({'error': 'Refacción no encontrada'}, status=404)
@@ -561,11 +610,8 @@ def realizar_cotizacion(request, refaccion_id):
 @require_http_methods(["GET"])
 def lista_cotizadas(request):
     try:
-        # Pantalla similar a Altas Globales, pero solo lo cotizado (o todo con status cotizado)
-        # El requerimiento dice "Refacciones cotizadas"
         refacciones = list(Refaccion.objects.filter(cotizado='SI').values())
         
-        # Limpieza de binarios
         for ref in refacciones:
             if 'archivo_pdf' in ref: del ref['archivo_pdf']
             if 'foto_refaccion' in ref: del ref['foto_refaccion']

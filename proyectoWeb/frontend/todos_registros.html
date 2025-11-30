@@ -110,8 +110,15 @@
   </header>
 
   <div class="top-bar">
-    <input id="searchInput" type="text" placeholder="Buscar por descripción, No. Parte o MFG...">
+    <input id="searchInput" type="text" placeholder="Buscar por usuario, descripción, No. Parte...">
     
+    <select id="filtroSitio">
+        <option value="">Sitio (Todos)</option>
+        <option value="Torreon">Torreon</option>
+        <option value="Celaya">Celaya</option>
+        <option value="MBC">MBC</option>
+    </select>
+
     <select id="filtroFamilia">
       <option value="">Familia (Todos)</option>
       <option value="Bombas">Bombas</option>
@@ -139,10 +146,11 @@
     <thead>
       <tr>
         <th>ID</th>
-        <th>Aprobado Mtto</th>
+        <th>Sitio</th> <th>Solicitante</th> <th>Aprobado Mtto</th>
         <th>Aprobado Planta</th>
         <th>Número MFG</th>
-        <th>Cotizado</th> <th>Descripción</th>
+        <th>Cotizado</th>
+        <th>Descripción</th>
         <th>Costo</th>
         <th>Área</th>
         <th>Consumo</th>
@@ -190,10 +198,11 @@
         const row = document.createElement("tr");
         row.innerHTML = `
           <td>${ref.id}</td>
-          <td>${ref.aprobacion_mtto || 'PENDIENTE'}</td>
+          <td>${ref.nombre_sitio || 'N/A'}</td> <td>${ref.nombre_solicitante || 'Desc'}</td> <td>${ref.aprobacion_mtto || 'PENDIENTE'}</td>
           <td>${ref.aprobacion_planta || 'PENDIENTE'}</td>
           <td>${ref.numero_mfg || 'PENDIENTE'}</td>
-          <td>${ref.cotizado || 'PENDIENTE'}</td> <td>${ref.descripcion}</td>
+          <td>${ref.cotizado || 'PENDIENTE'}</td>
+          <td>${ref.descripcion}</td>
           <td>${ref.costo}</td>
           <td>${ref.area}</td>
           <td>${ref.consumo}</td>
@@ -217,24 +226,30 @@
 
     // --- LÓGICA DE FILTRADO ---
     const searchInput = document.getElementById("searchInput");
+    const filtroSitio = document.getElementById("filtroSitio"); // NUEVO
     const filtroFamilia = document.getElementById("filtroFamilia");
     const filtroNacionalidad = document.getElementById("filtroNacionalidad");
 
     function aplicarFiltrosGlobales() {
       const texto = searchInput.value.toLowerCase();
+      const sitioSeleccionado = filtroSitio.value; // NUEVO
       const familiaSeleccionada = filtroFamilia.value;
       const nacionalidadSeleccionada = filtroNacionalidad.value;
 
       const filtrados = registrosOriginal.filter(ref => {
-        // ACTUALIZADO: Búsqueda incluye MFG
+        // ACTUALIZADO: Búsqueda incluye nombre solicitante
         const cumpleTexto = (ref.descripcion || "").toLowerCase().includes(texto) ||
                             (ref.numero_parte_proveedor || "").toLowerCase().includes(texto) ||
+                            (ref.nombre_solicitante || "").toLowerCase().includes(texto) ||
                             (ref.numero_mfg || "").toLowerCase().includes(texto);
         
+        // Nuevo Filtro de Sitio
+        const cumpleSitio = sitioSeleccionado === "" || (ref.nombre_sitio === sitioSeleccionado);
+
         const cumpleFamilia = familiaSeleccionada === "" || ref.familia === familiaSeleccionada;
         const cumpleNacionalidad = nacionalidadSeleccionada === "" || ref.nacionalidad === nacionalidadSeleccionada;
 
-        return cumpleTexto && cumpleFamilia && cumpleNacionalidad;
+        return cumpleTexto && cumpleSitio && cumpleFamilia && cumpleNacionalidad;
       });
 
       mostrarTabla(filtrados);
@@ -242,12 +257,14 @@
 
     function limpiarFiltros() {
       searchInput.value = "";
+      filtroSitio.value = "";
       filtroFamilia.value = "";
       filtroNacionalidad.value = "";
       aplicarFiltrosGlobales();
     }
 
     searchInput.addEventListener("input", aplicarFiltrosGlobales);
+    filtroSitio.addEventListener("change", aplicarFiltrosGlobales); // Listener
     filtroFamilia.addEventListener("change", aplicarFiltrosGlobales);
     filtroNacionalidad.addEventListener("change", aplicarFiltrosGlobales);
     
