@@ -130,7 +130,7 @@
   <h2>Mis Altas Registradas</h2>
 
   <div class="top-bar">
-    <input type="text" id="searchInput" placeholder="Buscar por descripción o número de parte...">
+    <input type="text" id="searchInput" placeholder="Buscar por descripción, No. Parte o MFG...">
     
     <select id="filtroFamilia">
       <option value="">Familia (Todos)</option>
@@ -163,7 +163,8 @@
         <th>ID</th>
         <th>Aprobado Mtto</th>
         <th>Aprobado Planta</th>
-        <th>Número MFG</th> <th>Descripción</th>
+        <th>Número MFG</th>
+        <th>Cotizado</th> <th>Descripción</th>
         <th>Costo</th>
         <th>Área</th>
         <th>Consumo</th>
@@ -189,7 +190,7 @@
 
   <script>
     let refaccionesOriginal = [];
-
+    
     function mostrarUsuario() {
       const nombre = localStorage.getItem('nombreUsuario');
       document.getElementById('usuarioInfo').textContent =
@@ -223,7 +224,6 @@
         }
 
         mostrarTabla(data);
-
       } catch (err) {
         errorMsg.textContent = err.message;
       }
@@ -241,7 +241,8 @@
           <td>${ref.id}</td>
           <td>${ref.aprobacion_mtto || 'PENDIENTE'}</td>
           <td>${ref.aprobacion_planta || 'PENDIENTE'}</td>
-          <td>${ref.numero_mfg || 'PENDIENTE'}</td> <td>${ref.descripcion}</td>
+          <td>${ref.numero_mfg || 'PENDIENTE'}</td>
+          <td>${ref.cotizado || 'PENDIENTE'}</td> <td>${ref.descripcion}</td>
           <td>${ref.costo}</td>
           <td>${ref.area}</td>
           <td>${ref.consumo}</td>
@@ -274,8 +275,10 @@
       const nacionalidadSeleccionada = filtroNacionalidad.value;
 
       const filtrados = refaccionesOriginal.filter(ref => {
+        // ACTUALIZADO: Búsqueda incluye MFG
         const cumpleTexto = (ref.descripcion || "").toLowerCase().includes(texto) ||
-                            (ref.numero_parte_proveedor || "").toLowerCase().includes(texto);
+                            (ref.numero_parte_proveedor || "").toLowerCase().includes(texto) ||
+                            (ref.numero_mfg || "").toLowerCase().includes(texto);
         
         const cumpleFamilia = familiaSeleccionada === "" || ref.familia === familiaSeleccionada;
         const cumpleNacionalidad = nacionalidadSeleccionada === "" || ref.nacionalidad === nacionalidadSeleccionada;
@@ -296,7 +299,7 @@
     searchInput.addEventListener("input", aplicarFiltros);
     filtroFamilia.addEventListener("change", aplicarFiltros);
     filtroNacionalidad.addEventListener("change", aplicarFiltros);
-
+    
     function descargarExcel() {
       const usuarioId = localStorage.getItem("usuarioId");
       window.open(`http://127.0.0.1:8000/api/descargar_excel/${usuarioId}/`);

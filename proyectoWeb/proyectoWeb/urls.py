@@ -32,4 +32,11 @@ urlpatterns = [
     path('api/subir_foto/<int:refaccion_id>/', views.subir_foto),
     path('api/ver_foto/<int:refaccion_id>/', views.ver_foto),
     path('api/descargar_pdf/<int:refaccion_id>/', views.descargar_pdf), # Descargar PDF Quimico
+
+
+    # --- NUEVAS RUTAS COMPRADOR ---
+    path('api/pendientes_cotizacion/', views.pendientes_cotizacion),
+    path('api/realizar_cotizacion/<int:refaccion_id>/', views.realizar_cotizacion),
+    path('api/lista_cotizadas/', views.lista_cotizadas),
+
 ]

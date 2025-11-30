@@ -394,13 +394,23 @@ def asignar_mfg(request, refaccion_id):
         refaccion.numero_mfg = mfg
         refaccion.save()
 
+        # 1. Notificar al USUARIO (Dueño)
         Notificacion.objects.create(
             usuario=refaccion.usuario,
             mensaje=f"PROCESO COMPLETADO. '{refaccion.descripcion}' tiene MFG: {mfg}",
             url_destino="mis_altas.html"
         )
 
-        return JsonResponse({'mensaje': 'Número MFG asignado correctamente'}, status=200)
+        # 2. NUEVO: Notificar al COMPRADOR (Rol 4 o descripción 'Comprador')
+        compradores = Usuario.objects.filter(descripcion_rol='Comprador')
+        for comp in compradores:
+            Notificacion.objects.create(
+                usuario=comp,
+                mensaje=f"Pendiente de Cotizar: '{refaccion.descripcion}' (MFG Asignado)",
+                url_destino="cotizaciones_pendientes.html"
+            )
+
+        return JsonResponse({'mensaje': 'Número MFG asignado y Comprador notificado'}, status=200)
 
     except Exception as e:
         return JsonResponse({'error': str(e)}, status=400)
@@ -496,3 +506,76 @@ def descargar_pdf(request, refaccion_id):
         return response
     except Exception as e:
         return HttpResponse(str(e), status=400)
+    
+
+# --------------------------------------------------------------------------
+# VISTAS: ROL COMPRADOR (Nuevos Requerimientos)
+# --------------------------------------------------------------------------
+
+@csrf_exempt
+@require_http_methods(["GET"])
+def pendientes_cotizacion(request):
+    try:
+        # Filtro: Ya tiene MFG asignado, pero Cotizado sigue PENDIENTE
+        refs_qs = Refaccion.objects.filter(
+            cotizado='PENDIENTE'
+        ).exclude(numero_mfg='PENDIENTE').select_related('usuario')
+        
+        lista_final = []
+        for r in refs_qs:
+            lista_final.append({
+                'id': r.id,
+                'descripcion': r.descripcion,
+                'numero_mfg': r.numero_mfg,
+                'nombre_solicitante': f"{r.usuario.nombre} {r.usuario.apellidos}",
+                'numero_parte_proveedor': r.numero_parte_proveedor
+            })
+        return JsonResponse(lista_final, safe=False, status=200)
+    except Exception as e:
+        return JsonResponse({'error': str(e)}, status=400)
+
+@csrf_exempt
+@require_http_methods(["POST"])
+def realizar_cotizacion(request, refaccion_id):
+    try:
+        # Simplemente cambia el estado a SI y notifica al usuario
+        refaccion = Refaccion.objects.filter(id=refaccion_id).first()
+        if not refaccion:
+            return JsonResponse({'error': 'Refacción no encontrada'}, status=404)
+
+        refaccion.cotizado = 'SI'
+        refaccion.save()
+
+        # Notificar al dueño de la refacción
+        Notificacion.objects.create(
+            usuario=refaccion.usuario,
+            mensaje=f"Tu solicitud '{refaccion.descripcion}' ha sido COTIZADA.",
+            url_destino="mis_altas.html"
+        )
+
+        return JsonResponse({'mensaje': 'Cotización concluida correctamente'}, status=200)
+    except Exception as e:
+        return JsonResponse({'error': str(e)}, status=400)
+
+@csrf_exempt
+@require_http_methods(["GET"])
+def lista_cotizadas(request):
+    try:
+        # Pantalla similar a Altas Globales, pero solo lo cotizado (o todo con status cotizado)
+        # El requerimiento dice "Refacciones cotizadas"
+        refacciones = list(Refaccion.objects.filter(cotizado='SI').values())
+        
+        # Limpieza de binarios
+        for ref in refacciones:
+            if 'archivo_pdf' in ref: del ref['archivo_pdf']
+            if 'foto_refaccion' in ref: del ref['foto_refaccion']
+            
+            try:
+                usr = Usuario.objects.get(usuario_id=ref['usuario_id'])
+                ref['nombre_solicitante'] = f"{usr.nombre} {usr.apellidos}"
+            except:
+                ref['nombre_solicitante'] = "Desconocido"
+
+        return JsonResponse(refacciones, safe=False, status=200)
+    except Exception as e:
+        return JsonResponse({'error': str(e)}, status=400)

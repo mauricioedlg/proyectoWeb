@@ -39,10 +39,10 @@ class Refaccion(models.Model):
     aprobacion_mtto = models.CharField(max_length=50, default='PENDIENTE', null=True, blank=True)
     aprobacion_planta = models.CharField(max_length=50, default='PENDIENTE', null=True, blank=True)
     numero_mfg = models.CharField(max_length=100, default='PENDIENTE', null=True, blank=True)
-
     # NUEVO CAMPO FOTO
     foto_refaccion = models.BinaryField(null=True, blank=True)
-
+    # NUEVO CAMPO REQUERIMIENTO 1
+    cotizado = models.CharField(max_length=50, default='PENDIENTE', null=True, blank=True) 
     usuario = models.ForeignKey('Usuario', on_delete=models.CASCADE, db_column='usuario_id')
 
     class Meta:
