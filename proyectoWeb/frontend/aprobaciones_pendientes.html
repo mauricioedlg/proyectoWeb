@@ -10,9 +10,7 @@
       background-color: purple;
       color: white;
     }
-    header {
-      margin-bottom: 20px;
-    }
+    header { margin-bottom: 20px; }
     button.volver {
       background: #4B0082;
       color: white;
@@ -20,9 +18,7 @@
       padding: 8px 12px;
       cursor: pointer;
     }
-    button.volver:hover {
-      background: #360062;
-    }
+    button.volver:hover { background: #360062; }
     h2 { margin-bottom: 10px; }
     
     table {
@@ -36,10 +32,7 @@
       padding: 10px;
       text-align: left;
     }
-    th {
-      background: #4B0082;
-    }
-    /* Efecto hover para indicar que es clickeable */
+    th { background: #4B0082; }
     tbody tr:hover {
       background: #9f009f;
       cursor: pointer;
@@ -58,7 +51,7 @@
     <button class="volver" onclick="window.location.href='bienvenida.html'">← Menú Principal</button>
   </header>
 
-  <h2>Aprobaciones Pendientes</h2>
+  <h2 id="tituloPantalla">Aprobaciones Pendientes</h2>
   <p>Seleccione un registro para ver detalles y aprobar o rechazar.</p>
 
   <div id="mensaje" class="no-data" style="display:none;">No hay solicitudes pendientes.</div>
@@ -68,7 +61,8 @@
       <tr>
         <th>ID</th>
         <th>Descripción</th>
-        <th>Solicitante</th> <th>Estatus</th>
+        <th>Solicitante</th>
+        <th>Estatus Actual</th>
       </tr>
     </thead>
     <tbody></tbody>
@@ -76,9 +70,16 @@
 
   <script>
     const rol = localStorage.getItem('descripcionRol');
-    if (rol !== 'Gerente Mantenimiento') {
-        alert("Acceso denegado. Solo Gerente Mantenimiento.");
+    
+    // SEGURIDAD: Solo permite entrar a los dos gerentes
+    if (rol !== 'Gerente Mantenimiento' && rol !== 'Gerente Planta') {
+        alert("Acceso denegado.");
         window.location.href = 'bienvenida.html';
+    }
+
+    // CAMBIAR TITULO SEGUN ROL
+    if (rol === 'Gerente Planta') {
+        document.getElementById('tituloPantalla').textContent = "Aprobaciones Pendientes (Gerente Planta)";
     }
 
     async function cargarPendientes() {
@@ -87,8 +88,16 @@
       const tabla = document.getElementById("tablaPendientes");
       tbody.innerHTML = "";
 
+      let urlApi = "";
+      // LOGICA PARA ELEGIR API
+      if (rol === 'Gerente Mantenimiento') {
+          urlApi = "http://127.0.0.1:8000/api/pendientes_aprobacion/";
+      } else {
+          urlApi = "http://127.0.0.1:8000/api/pendientes_aprobacion_planta/";
+      }
+
       try {
-        const res = await fetch("http://127.0.0.1:8000/api/pendientes_aprobacion/");
+        const res = await fetch(urlApi);
         const data = await res.json();
 
         if (data.length === 0) {
@@ -107,10 +116,16 @@
             window.location.href = "detalle_aprobacion.html";
           };
 
+          // Mostrar status relevante
+          let statusText = "";
+          if (rol === 'Gerente Mantenimiento') statusText = "Pendiente Mtto";
+          else statusText = "Mtto: SI / Planta: PENDIENTE";
+
           tr.innerHTML = `
             <td>${r.id}</td>
             <td>${r.descripcion}</td>
-            <td>${r.nombre_solicitante}</td> <td>${r.aprobacion_mtto}</td>
+            <td>${r.nombre_solicitante}</td>
+            <td>${statusText}</td>
           `;
           tbody.appendChild(tr);
         });

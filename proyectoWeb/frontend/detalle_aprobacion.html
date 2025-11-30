@@ -30,9 +30,7 @@
       font-size: 18px;
       line-height: 1.6;
     }
-    li strong {
-      color: #e0e0e0;
-    }
+    li strong { color: #e0e0e0; }
     .botones-container {
       display: flex;
       justify-content: center;
@@ -83,6 +81,7 @@
 
   <script>
     const id = localStorage.getItem("aprobacion_id");
+    const rol = localStorage.getItem('descripcionRol');
 
     if (!id) {
       alert("No se seleccionó ningún registro.");
@@ -94,14 +93,14 @@
         const res = await fetch(`http://127.0.0.1:8000/api/refaccion/${id}/`);
         const data = await res.json();
 
-        // Título = Descripción
         document.getElementById("tituloDescripcion").textContent = data.descripcion || "Sin descripción";
 
-        // Bullet points
         const ul = document.getElementById("listaDetalles");
         ul.innerHTML = `
           <li><strong>ID:</strong> ${data.id}</li>
-          <li><strong>Solicitado por:</strong> ${data.nombre_solicitante || 'Desconocido'}</li> <li><strong>Número de Parte:</strong> ${data.numero_parte_proveedor}</li>
+          <li><strong>Solicitado por:</strong> ${data.nombre_solicitante || 'Desconocido'}</li>
+          <li><strong>Aprobación Mtto:</strong> ${data.aprobacion_mtto}</li>
+          <li><strong>Número de Parte:</strong> ${data.numero_parte_proveedor}</li>
           <li><strong>Marca:</strong> ${data.marca_proveedor || 'N/A'}</li>
           <li><strong>Familia:</strong> ${data.familia || 'N/A'}</li>
           <li><strong>Área:</strong> ${data.area || 'N/A'}</li>
@@ -124,8 +123,16 @@
       const confirmacion = confirm(`¿Confirmas que deseas ${accion === 'SI' ? 'APROBAR' : 'RECHAZAR'} este registro?`);
       if (!confirmacion) return;
 
+      // DEFINE URL SEGUN ROL
+      let urlApi = "";
+      if (rol === 'Gerente Mantenimiento') {
+          urlApi = `http://127.0.0.1:8000/api/gestionar_aprobacion/${id}/`;
+      } else {
+          urlApi = `http://127.0.0.1:8000/api/gestionar_aprobacion_planta/${id}/`;
+      }
+
       try {
-        const res = await fetch(`http://127.0.0.1:8000/api/gestionar_aprobacion/${id}/`, {
+        const res = await fetch(urlApi, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ accion: accion })

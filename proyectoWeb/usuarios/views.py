@@ -1,7 +1,7 @@
 from django.http import JsonResponse, HttpResponse
 from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_http_methods
-from .models import Usuario, Refaccion
+from .models import Usuario, Refaccion, Notificacion
 import json
 import pandas as pd
 
@@ -91,15 +91,30 @@ def crear_refaccion(request):
             pagina_web=data.get('pagina_web'),
             archivo_pdf=contenido_pdf,
             usuario_id=usuario_id,
-            aprobacion_mtto='PENDIENTE'
+            aprobacion_mtto='PENDIENTE',
+            aprobacion_planta='PENDIENTE'
         )
+
+        # NOTIFICAR GERENTE MANTENIMIENTO
+        gerentes = Usuario.objects.filter(descripcion_rol='Gerente Mantenimiento')
+        
+        solicitante = Usuario.objects.filter(usuario_id=usuario_id).first()
+        nombre_solicitante = f"{solicitante.nombre} {solicitante.apellidos}" if solicitante else "Un usuario"
+
+        for gerente in gerentes:
+            Notificacion.objects.create(
+                usuario=gerente,
+                mensaje=f"Nuevo registro de: {nombre_solicitante}. Ref: {nueva_refaccion.descripcion}",
+                url_destino="aprobaciones_pendientes.html"
+            )
+
         return JsonResponse({'mensaje': 'Refacción creada', 'id': nueva_refaccion.id}, status=201)
 
     except Exception as e:
         return JsonResponse({'error': str(e)}, status=400)
 
 # --------------------------------------------------------------------------
-# VISTA: Mis Refacciones
+# VISTAS: Consultas (Mis Refacciones / Todas)
 # --------------------------------------------------------------------------
 @csrf_exempt
 @require_http_methods(["GET"])
@@ -113,9 +128,6 @@ def mis_refacciones(request, usuario_id):
     except Exception as e:
         return JsonResponse({'error': str(e)}, status=400)
 
-# --------------------------------------------------------------------------
-# VISTA: Todas las Refacciones
-# --------------------------------------------------------------------------
 @csrf_exempt
 @require_http_methods(["GET"])
 def todas_refacciones(request):
@@ -128,9 +140,6 @@ def todas_refacciones(request):
     except Exception as e:
          return JsonResponse({'error': str(e)}, status=400)
 
-# --------------------------------------------------------------------------
-# VISTA: Descargar Excel
-# --------------------------------------------------------------------------
 @csrf_exempt
 @require_http_methods(["GET"])
 def descargar_excel(request, usuario_id):
@@ -141,7 +150,6 @@ def descargar_excel(request, usuario_id):
         for ref in refacciones:
             if 'archivo_pdf' in ref:
                 del ref['archivo_pdf']
-
         df = pd.DataFrame(refacciones)
         response = HttpResponse(content_type='application/vnd.ms-excel')
         response['Content-Disposition'] = 'attachment; filename="mis_refacciones.xlsx"'
@@ -150,9 +158,6 @@ def descargar_excel(request, usuario_id):
     except Exception as e:
         return JsonResponse({'error': str(e)}, status=400)
 
-# --------------------------------------------------------------------------
-# VISTA: Descargar Excel Global
-# --------------------------------------------------------------------------
 @csrf_exempt
 @require_http_methods(["GET"])
 def descargar_excel_global(request):
@@ -163,7 +168,6 @@ def descargar_excel_global(request):
         for ref in refacciones:
             if 'archivo_pdf' in ref:
                 del ref['archivo_pdf']
-
         df = pd.DataFrame(refacciones)
         response = HttpResponse(content_type='application/vnd.ms-excel')
         response['Content-Disposition'] = 'attachment; filename="todas_refacciones.xlsx"'
@@ -172,32 +176,22 @@ def descargar_excel_global(request):
     except Exception as e:
         return JsonResponse({'error': str(e)}, status=400)
 
-# --------------------------------------------------------------------------
-# VISTA: Detalle Refacción (ACTUALIZADA: Devuelve nombre solicitante)
-# --------------------------------------------------------------------------
 @csrf_exempt
 @require_http_methods(["GET", "POST"])
 def detalle_refaccion(request, refaccion_id):
     if request.method == 'GET':
         try:
-            # Obtenemos valores básicos
             data = Refaccion.objects.filter(id=refaccion_id).values().first()
             if not data:
                 return JsonResponse({'error': 'Refacción no encontrada'}, status=404)
-            
-            # Limpieza PDF
             if 'archivo_pdf' in data:
                 del data['archivo_pdf'] 
-
-            # AGREGAR NOMBRE DEL USUARIO
             try:
                 usuario = Usuario.objects.get(usuario_id=data['usuario_id'])
                 data['nombre_solicitante'] = f"{usuario.nombre} {usuario.apellidos}"
             except Usuario.DoesNotExist:
                 data['nombre_solicitante'] = "Usuario Desconocido"
-                
             return JsonResponse(data, safe=False, status=200)
-
         except Exception as e:
             return JsonResponse({'error': str(e)}, status=400)
 
@@ -206,10 +200,10 @@ def detalle_refaccion(request, refaccion_id):
             refaccion = Refaccion.objects.filter(id=refaccion_id).first()
             if not refaccion:
                 return JsonResponse({'error': 'Refacción no encontrada'}, status=404)
-
             data = request.POST
             archivo = request.FILES.get('archivo_pdf')
 
+            # Actualización campos
             refaccion.descripcion = data.get('descripcion', refaccion.descripcion)
             refaccion.costo = data.get('costo', refaccion.costo)
             refaccion.area = data.get('area', refaccion.area)
@@ -240,32 +234,27 @@ def detalle_refaccion(request, refaccion_id):
             return JsonResponse({'error': str(e)}, status=400)
 
 # --------------------------------------------------------------------------
-# VISTA: Pendientes Aprobación (ACTUALIZADA: Devuelve nombre solicitante)
+# VISTAS: Aprobación MANTENIMIENTO
 # --------------------------------------------------------------------------
 @csrf_exempt
 @require_http_methods(["GET"])
 def pendientes_aprobacion(request):
     try:
-        # Usamos select_related para ser eficientes
+        # Solo lo que no ha revisado Mtto
         refs_qs = Refaccion.objects.filter(aprobacion_mtto='PENDIENTE').select_related('usuario')
-        
         lista_final = []
         for r in refs_qs:
             lista_final.append({
                 'id': r.id,
                 'descripcion': r.descripcion,
                 'usuario_id': r.usuario_id,
-                'nombre_solicitante': f"{r.usuario.nombre} {r.usuario.apellidos}", # CAMPO NUEVO
+                'nombre_solicitante': f"{r.usuario.nombre} {r.usuario.apellidos}",
                 'aprobacion_mtto': r.aprobacion_mtto
             })
-
         return JsonResponse(lista_final, safe=False, status=200)
     except Exception as e:
         return JsonResponse({'error': str(e)}, status=400)
 
-# --------------------------------------------------------------------------
-# VISTA: Gestionar Aprobación
-# --------------------------------------------------------------------------
 @csrf_exempt
 @require_http_methods(["POST"])
 def gestionar_aprobacion(request, refaccion_id):
@@ -277,13 +266,102 @@ def gestionar_aprobacion(request, refaccion_id):
         if not refaccion:
             return JsonResponse({'error': 'Refacción no encontrada'}, status=404)
 
-        if accion not in ['SI', 'NO']:
-             return JsonResponse({'error': 'Acción no válida'}, status=400)
-
         refaccion.aprobacion_mtto = accion
         refaccion.save()
 
-        return JsonResponse({'mensaje': f'Refacción actualizada a: {accion}'}, status=200)
+        # LOGICA NOTIFICACION DE MANTENIMIENTO
+        if accion == 'SI':
+             # Si aprueba Mtto -> Notificar a Gerente Planta
+             gerentes_planta = Usuario.objects.filter(descripcion_rol='Gerente Planta')
+             for gp in gerentes_planta:
+                 Notificacion.objects.create(
+                     usuario=gp,
+                     mensaje=f"Mtto Aprobado. Pendiente revisión Planta: {refaccion.descripcion}",
+                     url_destino="aprobaciones_pendientes.html"
+                 )
+        else:
+             # Si rechaza Mtto -> Notificar directo al Usuario
+             Notificacion.objects.create(
+                usuario=refaccion.usuario,
+                mensaje=f"Tu refacción '{refaccion.descripcion}' fue RECHAZADA por Mantenimiento.",
+                url_destino="mis_altas.html"
+             )
 
+        return JsonResponse({'mensaje': f'Mantenimiento: Refacción {accion}'}, status=200)
+
+    except Exception as e:
+        return JsonResponse({'error': str(e)}, status=400)
+
+# --------------------------------------------------------------------------
+# VISTAS: Aprobación PLANTA (NUEVO)
+# --------------------------------------------------------------------------
+@csrf_exempt
+@require_http_methods(["GET"])
+def pendientes_aprobacion_planta(request):
+    try:
+        # Solo lo que YA aprobó Mtto pero NO ha revisado Planta
+        refs_qs = Refaccion.objects.filter(aprobacion_mtto='SI', aprobacion_planta='PENDIENTE').select_related('usuario')
+        lista_final = []
+        for r in refs_qs:
+            lista_final.append({
+                'id': r.id,
+                'descripcion': r.descripcion,
+                'usuario_id': r.usuario_id,
+                'nombre_solicitante': f"{r.usuario.nombre} {r.usuario.apellidos}",
+                'aprobacion_mtto': r.aprobacion_mtto,
+                'aprobacion_planta': r.aprobacion_planta
+            })
+        return JsonResponse(lista_final, safe=False, status=200)
+    except Exception as e:
+        return JsonResponse({'error': str(e)}, status=400)
+
+@csrf_exempt
+@require_http_methods(["POST"])
+def gestionar_aprobacion_planta(request, refaccion_id):
+    try:
+        data = json.loads(request.body.decode('utf-8'))
+        accion = data.get('accion') 
+
+        refaccion = Refaccion.objects.filter(id=refaccion_id).first()
+        if not refaccion:
+            return JsonResponse({'error': 'Refacción no encontrada'}, status=404)
+
+        refaccion.aprobacion_planta = accion
+        refaccion.save()
+
+        # LOGICA NOTIFICACION DE PLANTA -> SIEMPRE NOTIFICA AL USUARIO FINAL
+        estado_texto = "APROBADO" if accion == "SI" else "RECHAZADO"
+        Notificacion.objects.create(
+            usuario=refaccion.usuario,
+            mensaje=f"Tu refacción '{refaccion.descripcion}' fue revisada por Planta. Estatus: {estado_texto}",
+            url_destino="mis_altas.html"
+        )
+
+        return JsonResponse({'mensaje': f'Planta: Refacción {accion}'}, status=200)
+
+    except Exception as e:
+        return JsonResponse({'error': str(e)}, status=400)
+
+# --------------------------------------------------------------------------
+# VISTAS: Notificaciones
+# --------------------------------------------------------------------------
+@csrf_exempt
+@require_http_methods(["GET"])
+def obtener_notificaciones(request, usuario_id):
+    try:
+        notifs = list(Notificacion.objects.filter(usuario_id=usuario_id)
+                      .order_by('leido', '-fecha').values())
+        return JsonResponse(notifs, safe=False, status=200)
+    except Exception as e:
+        return JsonResponse({'error': str(e)}, status=400)
+
+@csrf_exempt
+@require_http_methods(["POST"])
+def leer_notificacion(request, notificacion_id):
+    try:
+        n = Notificacion.objects.get(id=notificacion_id)
+        n.leido = True
+        n.save()
+        return JsonResponse({'mensaje': 'Leido'}, status=200)
     except Exception as e:
         return JsonResponse({'error': str(e)}, status=400)
