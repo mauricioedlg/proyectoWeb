@@ -43,12 +43,16 @@
     }
   </style>
 </head>
+
 <body>
   <header>
     <div>Proyecto Web</div>
     <nav>
       <a href="formulario.html">Formulario</a>
       <a href="mis_altas.html">Mis Altas</a>
+      <a href="corregir_altas.html">Corregir Mis Altas</a>
+      <a href="todos_registros.html">Altas Globales</a>
+      
       <button onclick="logout()">Cerrar Sesión</button>
     </nav>
   </header>
@@ -60,7 +64,8 @@
   <script>
     const nombre = localStorage.getItem('nombreUsuario');
     if (nombre) {
-      document.getElementById('saludo').textContent = `Hola ${nombre}, bienvenido al app de refacciones`;
+      document.getElementById('saludo').textContent =
+        `Hola ${nombre}, bienvenido al app de refacciones`;
     } else {
       window.location.href = 'index.html';
     }

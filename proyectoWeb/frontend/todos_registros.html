@@ -2,7 +2,7 @@
 <html lang="es">
 <head>
   <meta charset="UTF-8">
-  <title>Mis Altas</title>
+  <title>Todos los Registros</title>
   <style>
     body {
       font-family: Arial;
@@ -27,15 +27,7 @@
     .volver:hover {
       background: #360062;
     }
-    .usuario {
-      font-size: 14px;
-      opacity: 0.9;
-    }
-    h2 {
-      margin: 0 0 10px 0;
-    }
 
-    /* Search + Filtros + Botones */
     .top-bar {
       margin-top: 10px;
       display: flex;
@@ -43,12 +35,14 @@
       align-items: center;
       flex-wrap: wrap; 
     }
+
     #searchInput {
       padding: 8px;
       width: 300px;
       border-radius: 4px;
       border: none;
     }
+
     /* Estilo para los Dropdowns */
     .top-bar select {
       padding: 8px;
@@ -57,6 +51,7 @@
       cursor: pointer;
       color: black;
     }
+
     /* Botón Limpiar */
     #btnLimpiar {
       padding: 8px 12px;
@@ -69,6 +64,7 @@
     #btnLimpiar:hover {
       background: #ccc;
     }
+
     /* Botón Excel */
     #btnExcel {
       padding: 8px 12px;
@@ -78,9 +74,6 @@
       border-radius: 4px;
       cursor: pointer;
     }
-    #btnExcel:hover {
-      background: #e6c255;
-    }
 
     table {
       width: 100%;
@@ -88,52 +81,39 @@
       margin-top: 10px;
       background-color: #800080;
     }
+
     th, td {
       border: 1px solid #cccccc55;
       padding: 8px;
-      text-align: left;
       color: white;
     }
+
     th {
       background-color: #4B0082;
     }
+
     tr:nth-child(even) td {
       background-color: #7a007a;
     }
+
     tr:nth-child(odd) td {
       background-color: #8a008a;
     }
-    .no-data {
-      text-align: center;
-      margin-top: 20px;
-      color: #ffd966;
-    }
-    .error {
-      color: #ffcccb;
-      margin-top: 10px;
-      min-height: 20px;
-    }
+
     .loader {
       margin-top: 10px;
-      font-size: 14px;
-      opacity: 0.9;
-    }
-    a.link {
-      color: #ffd966;
-      text-decoration: underline;
     }
   </style>
 </head>
+
 <body>
   <header>
     <button class="volver" onclick="window.location.href='bienvenida.html'">← Menú Principal</button>
-    <div class="usuario" id="usuarioInfo"></div>
+    <h2>Todos los Registros</h2>
   </header>
 
-  <h2>Mis Altas Registradas</h2>
-
   <div class="top-bar">
-    <input type="text" id="searchInput" placeholder="Buscar por descripción o número de parte...">
+    <input id="searchInput" type="text" placeholder="Buscar por descripción o número de parte...">
     
     <select id="filtroFamilia">
       <option value="">Familia (Todos)</option>
@@ -152,16 +132,14 @@
       <option value="Nacional">Nacional</option>
       <option value="Internacional">Internacional</option>
     </select>
-
+    
     <button id="btnLimpiar" onclick="limpiarFiltros()">Limpiar filtros</button>
 
-    <button id="btnExcel" onclick="descargarExcel()">Descargar registros</button>
+    <button id="btnExcel" onclick="descargarExcelGlobal()">Descargar registros</button>
   </div>
 
-  <div class="loader" id="loader">Cargando refacciones...</div>
-  <div class="error" id="errorMsg"></div>
-
-  <table id="tablaRefacciones">
+  <div id="loader" class="loader">Cargando registros...</div>
+  <table id="tablaRegistros">
     <thead>
       <tr>
         <th>ID</th>
@@ -187,54 +165,26 @@
     <tbody></tbody>
   </table>
 
-  <p class="no-data" id="noDataMsg" style="display:none;">No hay refacciones registradas aún.</p>
-
   <script>
-    let refaccionesOriginal = [];
+    let registrosOriginal = [];
 
-    function mostrarUsuario() {
-      const nombre = localStorage.getItem('nombreUsuario');
-      document.getElementById('usuarioInfo').textContent =
-        nombre ? `Usuario: ${nombre}` : '';
-    }
+    async function cargarRegistrosGlobales() {
+      const loader = document.getElementById("loader");
+      const tbody = document.querySelector("#tablaRegistros tbody");
+      tbody.innerHTML = "";
+      loader.style.display = "block";
 
-    async function cargarMisAltas() {
-      const usuarioId = localStorage.getItem('usuarioId');
-      const loader = document.getElementById('loader');
-      const errorMsg = document.getElementById('errorMsg');
-      const noDataMsg = document.getElementById('noDataMsg');
-      const tbody = document.querySelector("#tablaRefacciones tbody");
+      const response = await fetch("http://127.0.0.1:8000/api/todas_refacciones/");
+      const data = await response.json();
 
-      loader.style.display = 'block';
-      errorMsg.textContent = '';
-      tbody.innerHTML = '';
-
-      try {
-        const response = await fetch(`http://127.0.0.1:8000/api/mis_refacciones/${usuarioId}/`);
-        const data = await response.json();
-
-        if (!response.ok) {
-          throw new Error(data.error || "Error al cargar");
-        }
-
-        refaccionesOriginal = data;
-        if (data.length === 0) {
-          noDataMsg.style.display = "block";
-          loader.style.display = "none";
-          return;
-        }
-
-        mostrarTabla(data);
-
-      } catch (err) {
-        errorMsg.textContent = err.message;
-      }
-
+      registrosOriginal = data;
       loader.style.display = "none";
+
+      mostrarTabla(registrosOriginal);
     }
 
     function mostrarTabla(lista) {
-      const tbody = document.querySelector("#tablaRefacciones tbody");
+      const tbody = document.querySelector("#tablaRegistros tbody");
       tbody.innerHTML = "";
 
       lista.forEach(ref => {
@@ -257,30 +207,30 @@
           <td>${ref.reduce_velocidad}</td>
           <td>${ref.existe_riesgo}</td>
           <td>${ref.nacionalidad}</td>
-          <td>${ref.pagina_web ? `<a class="link" href="${ref.pagina_web}" target="_blank">Abrir</a>` : "N/A"}</td>
+          <td>${ref.pagina_web ? `<a href="${ref.pagina_web}" target="_blank">Abrir</a>` : "N/A"}</td>
         `;
         tbody.appendChild(row);
       });
     }
 
-    // --- LÓGICA DE FILTRADO Y LIMPIEZA ---
+    // --- LÓGICA DE FILTRADO GLOBAL ---
     const searchInput = document.getElementById("searchInput");
     const filtroFamilia = document.getElementById("filtroFamilia");
     const filtroNacionalidad = document.getElementById("filtroNacionalidad");
 
-    function aplicarFiltros() {
+    function aplicarFiltrosGlobales() {
       const texto = searchInput.value.toLowerCase();
       const familiaSeleccionada = filtroFamilia.value;
       const nacionalidadSeleccionada = filtroNacionalidad.value;
 
-      const filtrados = refaccionesOriginal.filter(ref => {
+      const filtrados = registrosOriginal.filter(ref => {
         // 1. Texto
         const cumpleTexto = (ref.descripcion || "").toLowerCase().includes(texto) ||
                             (ref.numero_parte_proveedor || "").toLowerCase().includes(texto);
         
         // 2. Familia
         const cumpleFamilia = familiaSeleccionada === "" || ref.familia === familiaSeleccionada;
-
+        
         // 3. Nacionalidad
         const cumpleNacionalidad = nacionalidadSeleccionada === "" || ref.nacionalidad === nacionalidadSeleccionada;
 
@@ -294,22 +244,19 @@
       searchInput.value = "";
       filtroFamilia.value = "";
       filtroNacionalidad.value = "";
-      aplicarFiltros(); // Recarga la tabla con los datos originales
+      aplicarFiltrosGlobales();
     }
 
     // Listeners
-    searchInput.addEventListener("input", aplicarFiltros);
-    filtroFamilia.addEventListener("change", aplicarFiltros);
-    filtroNacionalidad.addEventListener("change", aplicarFiltros);
+    searchInput.addEventListener("input", aplicarFiltrosGlobales);
+    filtroFamilia.addEventListener("change", aplicarFiltrosGlobales);
+    filtroNacionalidad.addEventListener("change", aplicarFiltrosGlobales);
 
-    // 📥 Descargar Excel
-    function descargarExcel() {
-      const usuarioId = localStorage.getItem("usuarioId");
-      window.open(`http://127.0.0.1:8000/api/descargar_excel/${usuarioId}/`);
+    function descargarExcelGlobal() {
+      window.open("http://127.0.0.1:8000/api/descargar_excel_global/");
     }
 
-    mostrarUsuario();
-    cargarMisAltas();
+    cargarRegistrosGlobales();
   </script>
 </body>
 </html>

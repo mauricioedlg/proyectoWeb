@@ -12,7 +12,7 @@ class Usuario(models.Model):
     numero_de_sitio = models.PositiveSmallIntegerField(db_column='NumeroDeSitio')
 
     class Meta:
-        db_table = 'usuarios'  # tabla SQL
+        db_table = 'usuarios'
 
 class Refaccion(models.Model):
     id = models.AutoField(primary_key=True, db_column='id')
@@ -33,6 +33,9 @@ class Refaccion(models.Model):
     existe_riesgo = models.CharField(max_length=50, null=True, blank=True)
     nacionalidad = models.CharField(max_length=50, null=True, blank=True)
     pagina_web = models.CharField(max_length=255, null=True, blank=True)
+
+    # [cite_start]CAMPO ACTUALIZADO A TU SQL SERVER [cite: 268]
+    archivo_pdf = models.BinaryField(null=True, blank=True)
 
     usuario = models.ForeignKey('Usuario', on_delete=models.CASCADE, db_column='usuario_id')
 
